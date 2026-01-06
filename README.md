@@ -50,7 +50,10 @@ We performed a "sanity check" run on a small subset of the data (**100 samples**
 
 * **Baseline (Random Forest):** 56% Accuracy
 * **FastMapSVM (Euclidean, k=10):** **47% Accuracy**
-* **FastMapSVM (Correlation, k=10):** **74% Accuracy**
+* **FastMapSVM (Correlation, k=10):** **64% Accuracy**
+
+* Note: These preliminary percentages were generated from a random subset of 200 samples. The exact accuracy values may vary slightly between runs due to the random selection of data. Final performance metrics will be established upon running the full dataset.*
+  
 *Note: The debug run produced some "UndefinedMetricWarning" logs because 100 samples are insufficient for the SVM to fully learn class boundaries. These warnings will resolve during the full run.*
 
 ### How to Run the Full Experiment
