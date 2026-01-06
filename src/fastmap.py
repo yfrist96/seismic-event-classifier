@@ -1,132 +1,153 @@
 import numpy as np
-from src.distances import euclidean_distance, ncc_distance
 
 
 class FastMap:
-    def __init__(self, n_components=2, dist_func='euclidean'):
-        self.k = n_components
-        # Storage for pivots (objects themselves) and their distance
-        self.pivots = []
-        self.pivot_dists = []
+    def __init__(self, n_components, dist_func, verbose=True):
+        self.n_components = n_components
+        self.verbose = verbose
 
-        if dist_func == 'euclidean':
-            self.dist_fn = euclidean_distance
-        elif dist_func == 'correlation':
-            self.dist_fn = ncc_distance
+        # Handle string names for distance functions
+        if isinstance(dist_func, str):
+            if dist_func == 'euclidean':
+                self.dist_func = self._euclidean_dist
+            elif dist_func == 'correlation':
+                self.dist_func = self._correlation_dist
+            else:
+                raise ValueError(f"Unknown metric: {dist_func}")
         else:
-            raise ValueError(f"Unknown distance function: {dist_func}")
+            self.dist_func = dist_func
 
-    def _get_dist(self, obj_a, obj_b):
-        """Wrapper to call the selected distance function."""
-        return self.dist_fn(obj_a, obj_b)
+        self.pivots_ = []
+        self.X_train_ = None
+
+    def _euclidean_dist(self, x1, x2):
+        return np.linalg.norm(x1 - x2)
+
+    def _correlation_dist(self, x1, x2):
+        """
+        1 - Pearson Correlation.
+        Flattening (600,3) -> (1800,) captures global shape similarity.
+        """
+        x1_flat = x1.flatten()
+        x2_flat = x2.flatten()
+
+        # Centering
+        x1_c = x1_flat - np.mean(x1_flat)
+        x2_c = x2_flat - np.mean(x2_flat)
+
+        norm1 = np.linalg.norm(x1_c)
+        norm2 = np.linalg.norm(x2_c)
+
+        if norm1 == 0 or norm2 == 0:
+            return 1.0  # Max distance if signal is flat/silent
+
+        num = np.dot(x1_c, x2_c)
+        # Clip to [-1, 1] to avoid numerical errors going outside range
+        corr = np.clip(num / (norm1 * norm2), -1.0, 1.0)
+        return 1.0 - corr
+
+    def _get_dist(self, x1, x2):
+        return self.dist_func(x1, x2)
 
     def fit_transform(self, X):
-        """
-        Runs FastMap on X.
-        X shape: (N_samples, 600, 3)
-        Returns: Embeddings (N, k)
-        """
-        N = len(X)
-        embeddings = np.zeros((N, self.k))
-        self.pivots = []
-        self.pivot_dists = []
+        n_samples = X.shape[0]
+        self.X_train_ = X
+        embeddings = np.zeros((n_samples, self.n_components))
+        self.pivots_ = []
 
-        # We need a working copy of distances.
-        # Ideally, we compute distances on the fly using the recursive formula.
-        # D_new^2 = D_old^2 - (xi - xj)^2
+        for dim in range(self.n_components):
+            if self.verbose:
+                print(f"  [FastMap] Processing Dimension {dim + 1}/{self.n_components}...")
 
-        for dim in range(self.k):
-            print(f"  [FastMap] Processing Dimension {dim + 1}/{self.k}...")
+            # 1. Pivot Selection
+            idx_a = np.random.randint(0, n_samples)
+            idx_b = self._furthest_point(X, embeddings, dim, idx_a)
+            idx_a = self._furthest_point(X, embeddings, dim, idx_b)  # Refine A
 
-            # --- 1. Heuristic Pivot Selection ---
-            # Pick random object
-            idx_rand = np.random.randint(0, N)
-
-            # Find furthest from random (Pivot A)
-            dists_from_rand = np.array([self._projected_dist(X, idx_rand, i, embeddings, dim) for i in range(N)])
-            idx_a = np.argmax(dists_from_rand)
-
-            # Find furthest from Pivot A (Pivot B)
-            dists_from_a = np.array([self._projected_dist(X, idx_a, i, embeddings, dim) for i in range(N)])
-            idx_b = np.argmax(dists_from_a)
-
-            dist_ab = dists_from_a[idx_b]
-
-            # Safety check for duplicate data
+            # 2. Compute Projected Distance (guard against 0)
+            dist_ab = self._projected_dist(X[idx_a], X[idx_b], embeddings[idx_a], embeddings[idx_b], dim)
             if dist_ab < 1e-9:
-                dist_ab = 1e-9
+                dist_ab = 1.0  # Prevent division by zero
 
-            # Store pivots for later use (transform)
-            self.pivots.append((X[idx_a], X[idx_b]))
-            self.pivot_dists.append(dist_ab)
+            # 3. Project all points
+            col_vals = []
+            for i in range(n_samples):
+                d_ai = self._projected_dist(X[idx_a], X[i], embeddings[idx_a], embeddings[i], dim)
+                d_bi = self._projected_dist(X[idx_b], X[i], embeddings[idx_b], embeddings[i], dim)
 
-            # --- 2. Projection (Cosine Law) ---
-            # x_i = (d_ai^2 + d_ab^2 - d_ib^2) / (2 * d_ab)
+                # Cosine Law
+                val = (d_ai ** 2 + dist_ab ** 2 - d_bi ** 2) / (2 * dist_ab)
+                col_vals.append(val)
 
-            # We already have d_ai (dists_from_a)
-            # Now compute d_ib
-            dists_from_b = np.array([self._projected_dist(X, idx_b, i, embeddings, dim) for i in range(N)])
-
-            # Calculate coordinates for this dimension
-            col_vals = (dists_from_a ** 2 + dist_ab ** 2 - dists_from_b ** 2) / (2 * dist_ab)
             embeddings[:, dim] = col_vals
 
+            # 4. Store Pivot Info (Cleaned up)
+            self.pivots_.append({
+                'idx_a': idx_a,
+                'idx_b': idx_b,
+                'dist_ab': dist_ab,
+                # Store strictly previous coords required for next steps
+                'coords_a': embeddings[idx_a, :dim].copy(),
+                'coords_b': embeddings[idx_b, :dim].copy()
+            })
+
         return embeddings
-
-    def _projected_dist(self, X, i, j, embeddings, current_dim):
-        """
-        Calculates D_new(i, j) based on recursion:
-        D_new^2 = D_original^2 - sum((x_d_i - x_d_j)^2) for previous dims
-        """
-        # Original distance (Physics)
-        d_orig = self._get_dist(X[i], X[j])
-
-        # Subtraction term (Math)
-        if current_dim == 0:
-            return d_orig
-
-        dist_sq_projected = 0
-        for d in range(current_dim):
-            dist_sq_projected += (embeddings[i, d] - embeddings[j, d]) ** 2
-
-        val = d_orig ** 2 - dist_sq_projected
-        return np.sqrt(max(0, val))  # max(0) prevents NaN from small float errors
 
     def transform(self, X_test):
-        """
-        Project new data using stored pivots.
-        """
-        N = len(X_test)
-        embeddings = np.zeros((N, self.k))
+        n_test = X_test.shape[0]
+        embeddings = np.zeros((n_test, self.n_components))
 
-        for dim in range(self.k):
-            pivot_a, pivot_b = self.pivots[dim]
-            dist_ab = self.pivot_dists[dim]
+        for dim in range(self.n_components):
+            pivot_info = self.pivots_[dim]
+            idx_a = pivot_info['idx_a']
+            idx_b = pivot_info['idx_b']
+            dist_ab = pivot_info['dist_ab']
 
-            # For each test point, project it
-            for i in range(N):
-                # 1. Get projected distance to Pivot A and Pivot B
-                # We must subtract previous dimensions' contributions manually
-                d_ai = self._get_dist(pivot_a, X_test[i])
-                d_bi = self._get_dist(pivot_b, X_test[i])
+            # Raw train samples
+            pivot_a_raw = self.X_train_[idx_a]
+            pivot_b_raw = self.X_train_[idx_b]
 
-                subtract_ai = 0
-                subtract_bi = 0
+            # Previous embedding coordinates (Projected space)
+            prev_coords_a = pivot_info['coords_a']  # Now correctly sized (:dim)
+            prev_coords_b = pivot_info['coords_b']
 
-                # To be mathematically strict, we need the embedding coords of the pivots too.
-                # However, FastMap defines Pivot A as being at 0 on its own axis.
-                # Simplification: We assume the pivots effectively captured the variance.
-                # For high precision, we calculate the reduction based on CURRENT embeddings.
+            for i in range(n_test):
+                # 1. Raw Distances
+                d_ai_raw = self._get_dist(pivot_a_raw, X_test[i])
+                d_bi_raw = self._get_dist(pivot_b_raw, X_test[i])
 
-                if dim > 0:
-                    # In a strict implementation, we would store pivot embedding coords.
-                    # For this project scope, we calculate standard projection.
-                    pass
+                # 2. Projection Correction (Subtract previous dimensions)
+                correction_ai = np.sum((prev_coords_a - embeddings[i, :dim]) ** 2)
+                correction_bi = np.sum((prev_coords_b - embeddings[i, :dim]) ** 2)
 
-                    # Apply Cosine Law directly
-                # Note: This is an approximation for transform if we don't track pivot previous coords
-                # deeply, but usually sufficient for classification tasks.
-                x_val = (d_ai ** 2 + dist_ab ** 2 - d_bi ** 2) / (2 * dist_ab)
-                embeddings[i, dim] = x_val
+                # 3. Apply Correction & CLAMP to 0 (Fixes numerical instability)
+                d_ai_sq = max(0.0, d_ai_raw ** 2 - correction_ai)
+                d_bi_sq = max(0.0, d_bi_raw ** 2 - correction_bi)
+
+                # 4. Cosine Law
+                val = (d_ai_sq + dist_ab ** 2 - d_bi_sq) / (2 * dist_ab)
+                embeddings[i, dim] = val
 
         return embeddings
+
+    def _projected_dist(self, obj_a, obj_b, coord_a, coord_b, current_dim):
+        raw_dist = self._get_dist(obj_a, obj_b)
+        sum_sq_diff = 0.0
+        if current_dim > 0:
+            diffs = coord_a[:current_dim] - coord_b[:current_dim]
+            sum_sq_diff = np.sum(diffs ** 2)
+
+        projected_sq = raw_dist ** 2 - sum_sq_diff
+        return 0.0 if projected_sq < 0 else np.sqrt(projected_sq)
+
+    def _furthest_point(self, X, embeddings, dim, idx_ref):
+        max_dist = -1.0
+        best_idx = -1
+        # Random sample of 100 points for speed, or check all for accuracy
+        # Checking all is safer for <10k samples
+        for i in range(X.shape[0]):
+            d = self._projected_dist(X[idx_ref], X[i], embeddings[idx_ref], embeddings[i], dim)
+            if d > max_dist:
+                max_dist = d
+                best_idx = i
+        return best_idx
