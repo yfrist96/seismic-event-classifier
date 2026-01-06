@@ -150,4 +150,4 @@ class FastMap:
             if d > max_dist:
                 max_dist = d
                 best_idx = i
-        return best_idx 
+        return best_idx
