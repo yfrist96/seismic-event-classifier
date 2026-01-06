@@ -48,9 +48,9 @@ This project discriminates between **Earthquakes** and **Explosions** using seis
 ### Preliminary Results (Debug Run)
 We performed a "sanity check" run on a small subset of the data (**100 samples**) to verify the pipeline. Even with this tiny dataset, FastMap showed promising results compared to the baseline.
 
-* **Baseline (Random Forest):** 60% Accuracy
-* **FastMapSVM (Euclidean, k=10):** **62% Accuracy**
-
+* **Baseline (Random Forest):** 56% Accuracy
+* **FastMapSVM (Euclidean, k=10):** **47% Accuracy**
+* **FastMapSVM (Correlation, k=10):** **74% Accuracy**
 *Note: The debug run produced some "UndefinedMetricWarning" logs because 100 samples are insufficient for the SVM to fully learn class boundaries. These warnings will resolve during the full run.*
 
 ### How to Run the Full Experiment
