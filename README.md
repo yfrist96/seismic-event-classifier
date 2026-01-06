@@ -1,7 +1,7 @@
 # seismic-event-classifier
 A machine learning classifier using Support Vector Machines (SVM) to distinguish between natural earthquakes and man-made explosions based on seismic signal characteristics.
 
-
+ 
 Phase 1: Project Setup & Data Ingestion
 
 Before writing the complex algorithms, we need a solid foundation to read your .h5 files correctly.
