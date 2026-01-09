@@ -32,30 +32,6 @@ def run_experiments():
     print(f"Loading Data from: {CONFIG['data_dir']}...")
     (X_train, y_train), (X_val, y_val), (X_test, y_test) = load_data(CONFIG['data_dir'])
 
-    # =======================================================
-    # REMOVE BEFORE RUNNING FULL EXPERIMENTS
-    # =======================================================
-    # =======================================================
-    # REMOVE BEFORE RUNNING FULL EXPERIMENTS
-    # =======================================================
-    # --- DEBUG START: Run on just 100 samples to test pipeline ---
-    print("!!! DEBUG MODE: Shuffling and truncating data to 100 samples !!!")
-
-    # 1. Shuffle Train Data (to ensure we get both classes)
-    idx_train = np.random.permutation(len(X_train))
-    X_train = X_train[idx_train][:300]
-    y_train = y_train[idx_train][:300]
-
-    # 2. Shuffle Test Data
-    idx_test = np.random.permutation(len(X_test))
-    X_test = X_test[idx_test][:300]
-    y_test = y_test[idx_test][:300]
-
-    # Verify we actually have 2 classes
-    print(f"Debug Class Balance: {np.unique(y_train, return_counts=True)}")
-    # --- DEBUG END ---
-    # =======================================================
-    # =======================================================
 
     # 3. Run Baseline (Random Forest)
     print("\n=== Running Baseline Model ===")
