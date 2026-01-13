@@ -2,7 +2,6 @@ import h5py
 import numpy as np
 import os
 
-
 def load_split(file_path):
     """
     Loads X, y, and event_id from a single HDF5 file.
