@@ -62,3 +62,34 @@ The code is currently set to "Debug Mode" to ensure it runs quickly on CPUs. To 
 1.  Open `src/main.py`.
 2.  **Delete or Comment Out** the Debug Block (Lines ~35–46).
 3.  Run the script: `python -m src.main`
+
+## 🚀 Achieving 91% Accuracy: The Frequency Domain Approach
+
+### The Challenge
+Initially, the model relied on raw time-series waveforms. However, seismic events (Earthquakes vs. Explosions) often have variable start times. Standard distance metrics (Euclidean/Correlation) on raw data failed to account for these time shifts, resulting in low accuracy (~62-66%).
+
+### The Solution: Frequency Domain (FFT)
+To overcome time-alignment issues, we pivoted to **Frequency Domain Feature Extraction**. By converting signals to their spectral magnitude using Fast Fourier Transform (FFT), we isolated the *energy content* of the signal (the "what") while ignoring the temporal start time (the "when").
+
+* **Explosions:** Characterized by higher frequency energy and sharp spectral peaks.
+* **Earthquakes:** Characterized by lower frequency, distributed energy.
+
+### Technical Implementation & Tuning
+We optimized the FastMap pipeline to fully leverage these new features:
+
+1.  **Feature Engineering:**
+    * Converted `(600, 3)` time-series data $\rightarrow$ Log-Magnitude FFT Spectrograms.
+    * This created a shift-invariant feature set that robustly separates event types.
+
+2.  **FastMap Optimization:**
+    * **Distance Metric:** Switched to **Euclidean Distance** on the FFT log-magnitudes.
+    * **Dimensions ($k$):** Increased $k$ from `10` to **`60`**. The frequency data contains dense information; increasing dimensions allowed FastMap to preserve subtle spectral details lost in lower projections.
+
+3.  **Classifier Tuning (SVM):**
+    * Performed an aggressive Grid Search on the SVM.
+    * **High Regularization ($C$):** Unlocked high $C$ values (`10,000` - `50,000`), allowing the SVM to draw tighter, more precise decision boundaries around the complex frequency clusters.
+
+### Final Results
+* **Baseline (Raw Time Data):** ~62.8% Accuracy
+* **FastMap (Time Correlation):** ~66.7% Accuracy
+* **FastMap (Frequency Domain + $k=60$):** **91.0% Accuracy** 🏆
