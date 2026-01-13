@@ -1,5 +1,5 @@
 import numpy as np
-from src.distances import euclidean_distance, ncc_distance
+from src.distances import euclidean_distance, ncc_distance, cosine_distance
 
 
 class FastMap:
@@ -12,6 +12,8 @@ class FastMap:
 
         if dist_func == 'euclidean':
             self.dist_fn = euclidean_distance
+        elif dist_func == 'cosine':
+            self.dist_fn = cosine_distance
         elif dist_func == 'correlation':
             self.dist_fn = ncc_distance
         else:

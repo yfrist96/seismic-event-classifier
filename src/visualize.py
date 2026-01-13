@@ -117,7 +117,6 @@ def visualize_tsne_results():
 
     print("[t-SNE] Visualization complete.\n")
 
-
 if __name__ == "__main__":
     visualize_results()
     visualize_tsne_results()

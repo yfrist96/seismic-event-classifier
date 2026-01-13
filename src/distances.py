@@ -8,6 +8,30 @@ def euclidean_distance(x1, x2):
     """
     return np.linalg.norm(x1.flatten() - x2.flatten())
 
+def cosine_distance(x1, x2):
+    """
+    Computes Cosine Distance (1 - Cosine Similarity).
+    Formula: 1 - (u . v) / (|u| * |v|)
+    """
+    # Flatten inputs (essential for FFT features which might come in as 2D)
+    u = x1.flatten()
+    v = x2.flatten()
+    
+    dot_product = np.dot(u, v)
+    norm_u = np.linalg.norm(u)
+    norm_v = np.linalg.norm(v)
+    
+    # Safety check: if one vector is all zeros (empty signal), distance is max (1.0)
+    if norm_u == 0 or norm_v == 0:
+        return 1.0
+        
+    similarity = dot_product / (norm_u * norm_v)
+    
+    # Clip to [-1, 1] to handle tiny floating point errors
+    similarity = np.clip(similarity, -1.0, 1.0)
+    
+    return 1.0 - similarity
+
 
 def ncc_distance(x1, x2):
     """
