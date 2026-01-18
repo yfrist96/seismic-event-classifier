@@ -7,7 +7,7 @@ CONFIG = {
     # HYPERPARAMETERS
     # ----------------
     # k=30 got 89%. k=60 captures more fine-grained frequency details.
-    "dimensions": [70],
+    "dimensions": [120],
 
     # Euclidean is mandatory for FFT (Magnitude) data
     "distances": ["euclidean"],
