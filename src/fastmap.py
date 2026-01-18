@@ -1,26 +1,43 @@
 import numpy as np
-from src.distances import euclidean_distance, ncc_distance, cosine_distance
+from src.distances import (
+    euclidean_distance, 
+    cosine_distance, 
+    ncc_distance,
+    wasserstein_fourier_distance,
+    likelihood_ratio_distance,
+    kulczynski_distance,
+    soergel_distance,
+    lorentzian_distance,
+    canberra_distance
+)
 
 
 class FastMap:
     def __init__(self, n_components=2, dist_func='euclidean'):
         self.k = n_components
+        self.distance_functions = {
+            'euclidean': euclidean_distance,
+            'cosine': cosine_distance,
+            'ncc': ncc_distance,
+            'wasserstein_fourier_distance': wasserstein_fourier_distance,
+            'likelihood_ratio_distance': likelihood_ratio_distance,
+            'kulczynski': kulczynski_distance,
+            'soergel': soergel_distance,
+            'lorentzian': lorentzian_distance,
+            'canberra': canberra_distance
+        }
+        if dist_func not in self.distance_functions:
+            raise ValueError(f"Unknown distance function: {dist_func}")
+        
+        self.dist_func = self.distance_functions[dist_func]
+        
         self.pivots = []  # Stores (X[idx_a], X[idx_b])
         self.pivot_dists = []  # Stores dist_ab
         # NEW: Store embeddings of the pivots to project test data correctly
         self.pivot_embeddings = []
 
-        if dist_func == 'euclidean':
-            self.dist_fn = euclidean_distance
-        elif dist_func == 'cosine':
-            self.dist_fn = cosine_distance
-        elif dist_func == 'correlation':
-            self.dist_fn = ncc_distance
-        else:
-            raise ValueError(f"Unknown distance function: {dist_func}")
-
     def _get_dist(self, obj_a, obj_b):
-        return self.dist_fn(obj_a, obj_b)
+        return self.dist_func(obj_a, obj_b)
 
     def fit_transform(self, X):
         N = len(X)

@@ -7,10 +7,20 @@ CONFIG = {
     # HYPERPARAMETERS
     # ----------------
     # k=30 got 89%. k=60 captures more fine-grained frequency details.
-    "dimensions": [120],
+    "dimensions": [30],
 
-    # Euclidean is mandatory for FFT (Magnitude) data
-    "distances": ["euclidean"],
+    # Available distance functions from distances.py:
+    # euclidean, cosine, ncc, wasserstein_fourier_distance, likelihood_ratio_distance,
+    # kulczynski, soergel, lorentzian, canberra
+    "distances": [
+        #"euclidean", 
+        #"wasserstein_fourier_distance", 
+        #"likelihood_ratio_distance",
+        "kulczynski",
+        "soergel",
+        "lorentzian",
+        "canberra"
+    ],
 
     # Aggressive Grid Search
     # We added C=10000 and C=50000 to allow tighter fits.
