@@ -47,6 +47,11 @@ def run_experiments():
     print(f"Loading Data from: {CONFIG['data_dir']}...")
     (X_train, y_train), (X_val, y_val), (X_test, y_test) = load_data(CONFIG['data_dir'])
 
+    unique, counts = np.unique(y_train, return_counts=True)
+    print(f"\nClass Distribution in Training Set:")
+    for label, count in zip(unique, counts):
+        print(f"  Class {label}: {count} samples ({count/len(y_train)*100:.1f}%)")
+
     # 3. Run Baseline (Random Forest)
     # Must run on RAW DATA before FFT conversion
     print("\n=== Running Baseline Model ===")
