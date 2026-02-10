@@ -93,3 +93,55 @@ We optimized the FastMap pipeline to fully leverage these new features:
 * **Baseline (Raw Time Data):** ~62.8% Accuracy
 * **FastMap (Time Correlation):** ~66.7% Accuracy
 * **FastMap (Frequency Domain + $k=60$):** **91.0% Accuracy** 🏆
+
+
+
+What Worked:
+
+    Switching to Frequency Domain (FFT) 🏆
+
+        Why: This was the game-changer. By converting signals to Log-Magnitude Spectrograms, we made the model Shift-Invariant. It stopped caring when the event happened and focused on what the energy looked like.
+
+        Result: Accuracy jumped from ~66% to ~89% immediately.
+
+    Increasing Dimensions (k=120)
+
+        Why: The frequency data is complex (900+ features). Compressing it to only 10 dimensions (like we did initially) made the data too "blurry." Increasing to 120 allowed the model to see the fine "texture" differences between Earthquakes and Explosions.
+
+        Result: Pushed accuracy from 89% to 92%.
+
+    High SVM Strictness (C=1000)
+
+        Why: Because our high-k data was very detailed, we needed a "Strict Teacher." We forced the SVM to draw a very tight, precise boundary instead of a loose, sloppy one.
+
+        Result: Reduced false positives and solidified the 92% score.
+
+❌ What Didn't Work :
+
+    Simple Frequency Filtering (High-Pass/Band-Pass)
+
+        The Attempt: We tried applying standard filters to the time-series data to remove low-frequency noise or isolate high frequencies (thinking explosions would stand out more).
+
+        Why it failed: It was a "Band-Aid" solution.
+
+            Overlap: Earthquakes and explosions share many frequencies; a hard filter cut out useful information from both.
+
+            Wrong Problem: Filtering didn't fix the Time-Shift issue. A cleaner wave that is still shifted in time is still "far away" in Euclidean distance.
+
+        Result: Minimal improvement; the model remained confused by the alignment.
+
+    Raw Time-Series Data
+
+        The Attempt: Feeding the raw 600 time-points directly into the model.
+
+        Why it failed: The Time-Shift Problem. If Earthquake A started at 1.0s and Earthquake B started at 1.5s, the model thought they were completely different events.
+
+        Result: Stuck at ~60-62% accuracy (basically random guessing).
+
+    Euclidean Distance on Time Data
+
+        The Attempt: Using standard geometry to measure the distance between raw waves.
+
+        Why it failed: Euclidean distance compares point-to-point. Because of the time shifts, the "peaks" didn't line up, resulting in massive, meaningless distance errors.
+
+        Result: ~53% accuracy (Worse than guessing).
