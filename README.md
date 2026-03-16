@@ -1,147 +1,159 @@
-# seismic-event-classifier
-A machine learning classifier using Support Vector Machines (SVM) to distinguish between natural earthquakes and man-made explosions based on seismic signal characteristics.
-Project Goal
+# Seismic Event Classifier
 
-    Classify seismic events as Earthquakes or Explosions using the FastMapSVM framework.
+A machine learning classifier using **FastMap embeddings + FFT + SVM ensembles** to distinguish between natural earthquakes and man-made explosions based on seismic signal characteristics.
 
-Compare FastMapSVM against a standard baseline model to evaluate performance.
+## Project Goal
 
-Analyze the impact of different distance metrics (Euclidean vs. Correlation) and embedding dimensions (k)
+- Classify seismic events as **Earthquakes** or **Explosions** using the FastMapSVM framework
+- Compare FastMapSVM against a baseline model to evaluate performance
+- Analyze the impact of different distance metrics and embedding dimensions
 
 ## Project Structure
 ```text
-seismic_project/
+seismic-event-classifier/
 ├── data/
-│   └── seismic_classifier_dataset.h5   # The processed HDF5 dataset
+│   ├── dataset_train.h5              # Training split (HDF5)
+│   ├── dataset_val.h5                # Validation split (HDF5)
+│   └── dataset_test.h5               # Test split (HDF5)
 ├── output/
-│   ├── models/                         # Trained .pkl models
-│   ├── embeddings/                     # FastMap embeddings (.npy)
-│   ├── configs/                        # Experiment configurations (.json)
-│   └── plots/                          # Generated visualization plots
+│   ├── models/                       # Saved models (.joblib)
+│   ├── embeddings/                   # FastMap embeddings (.npy)
+│   ├── results/                      # Classification reports (.json)
+│   ├── plots/                        # Visualization plots
+│   └── tb_logs/                      # TensorBoard logs
 ├── src/
 │   ├── __init__.py
-│   ├── dataloader.py                   # Data loading & Event-ID splitting
-│   ├── distances.py                    # Euclidean & Normalized Cross-Correlation metrics
-│   ├── fastmap.py                      # FastMap algorithm implementation
-│   ├── classifier.py                   # SVM wrapper & Baseline classifier
-│   └── main.py                         # Main experiment execution script
-├── requirements.txt                    # Project dependencies
-└── README.md       
+│   ├── config.py                     # Centralized configuration
+│   ├── dataloader.py                 # HDF5 data loading pipeline
+│   ├── distances.py                  # Distance metric implementations
+│   ├── fastmap.py                    # FastMap algorithm
+│   ├── classifier.py                 # SVM wrapper & Baseline classifier
+│   ├── main.py                       # Main experiment runner
+│   └── visualize.py                  # Embedding visualization (2D, t-SNE)
+├── Colab_Results.ipynb               # Google Colab experiment notebook
+├── requirements.txt
+├── .gitignore
+└── README.md
 ```
 
-### Project Overview
-This project discriminates between **Earthquakes** and **Explosions** using seismic waveform data. We implemented the **FastMapSVM** framework—a method that combines the FastMap dimensionality reduction algorithm with Support Vector Machines (SVM)—and compared it against a standard baseline model.
+## Pipeline
 
-### Implemented Models
-1.  **FastMapSVM (The Core Approach):**
-    * **Algorithm:** Projects complex waveform data into a low-dimensional Euclidean space ($k$ dimensions) while preserving domain-specific distances.
-    * **Distance Metrics:** Implemented two custom metrics:
-        * **Euclidean Distance:** Standard geometric distance.
-        * **Normalized Cross-Correlation (NCC):** A domain-specific metric that measures waveform similarity regardless of amplitude scaling.
-    * **Dimensions ($k$):** Evaluated across $k \in \{2, 5, 10, 20\}$.
+```
+Raw HDF5 (N, 600, 3)
+  → FFT → Log-magnitude → L2 normalization
+    → FastMap embedding (N, k)
+      → StandardScaler
+        → SVM (tuned on validation set)
+          → Retrain on train+val with best params
+            → [Single Model] or [Ensemble: 5 voters, majority vote]
+              → Final evaluation on test set
+```
 
-2.  **Baseline Model (The Comparison):**
-    * **Algorithm:** Random Forest Classifier.
-    * **Features:** Extracts statistical features (Mean, Std, Max, Min) from raw waveforms instead of using embeddings.
-    * **Goal:** Provides a performance benchmark to validate if FastMap adds value.
+### Data Split Usage
 
-### Preliminary Results (Debug Run)
-We performed a "sanity check" run on a small subset of the data (**100 samples**) to verify the pipeline. Even with this tiny dataset, FastMap showed promising results compared to the baseline.
+| Split | Purpose |
+|-------|---------|
+| **Train** | Train FastMap embeddings and SVM models |
+| **Validation** | Hyperparameter tuning (replaces cross-validation on train) |
+| **Test** | Final evaluation only — never seen during tuning |
 
-* **Baseline (Random Forest):** 56% Accuracy
-* **FastMapSVM (Euclidean, k=10):** **47% Accuracy**
-* **FastMapSVM (Correlation, k=10):** **64% Accuracy**
+After the best hyperparameters are selected using the validation set, the model is **retrained on train+val combined** before final test evaluation. This maximizes training data while keeping the test set truly unseen.
 
-* Note: These preliminary percentages were generated from a random subset of 200 samples. The exact accuracy values may vary slightly between runs due to the random selection of data. Final performance metrics will be established upon running the full dataset.*
-  
-*Note: The debug run produced some "UndefinedMetricWarning" logs because 100 samples are insufficient for the SVM to fully learn class boundaries. These warnings will resolve during the full run.*
+## Implemented Models
 
-### How to Run the Full Experiment
-The code is currently set to "Debug Mode" to ensure it runs quickly on CPUs. To run the full experiment on the complete dataset (6,000+ events):
+### FastMapSVM (Core Approach)
+- Projects FFT-transformed waveform data into a low-dimensional Euclidean space (k dimensions) using FastMap
+- Preserves domain-specific distances during dimensionality reduction
+- **Distance Metrics:** Euclidean, Lorentzian, Canberra, Cosine, NCC, Wasserstein, Kulczynski, Soergel, Likelihood Ratio
+- **Ensemble:** 5 independent FastMap+SVM voters with majority vote for improved stability
 
-1.  Open `src/main.py`.
-2.  **Delete or Comment Out** the Debug Block (Lines ~35–46).
-3.  Run the script: `python -m src.main`
+### Baseline Model (Comparison)
+- Random Forest on statistical features (Mean, Std, Max, Min per channel)
+- Provides a performance benchmark to validate FastMap's value
 
-## 🚀 Achieving 91% Accuracy: The Frequency Domain Approach
+## Results
 
-### The Challenge
-Initially, the model relied on raw time-series waveforms. However, seismic events (Earthquakes vs. Explosions) often have variable start times. Standard distance metrics (Euclidean/Correlation) on raw data failed to account for these time shifts, resulting in low accuracy (~62-66%).
+| Model | Accuracy |
+|-------|----------|
+| Baseline (Random Forest) | ~62.8% |
+| FastMap + Time Correlation | ~66.7% |
+| FastMap + FFT + SVM (single, k=60) | ~91.0% |
+| FastMap + FFT + SVM (ensemble, k=80) | ~92.8% |
 
-### The Solution: Frequency Domain (FFT)
-To overcome time-alignment issues, we pivoted to **Frequency Domain Feature Extraction**. By converting signals to their spectral magnitude using Fast Fourier Transform (FFT), we isolated the *energy content* of the signal (the "what") while ignoring the temporal start time (the "when").
+## Model Saving
 
-* **Explosions:** Characterized by higher frequency energy and sharp spectral peaks.
-* **Earthquakes:** Characterized by lower frequency, distributed energy.
+Trained models are saved as `.joblib` files in `output/models/`, containing:
+- FastMap object (with learned pivots)
+- StandardScaler
+- Trained SVM
+- Best hyperparameters
+- Validation and test accuracy
 
-### Technical Implementation & Tuning
-We optimized the FastMap pipeline to fully leverage these new features:
+Load a saved model:
+```python
+import joblib
+model = joblib.load("output/models/fastmap_FFT_euclidean_k80_tuned.joblib")
+svm = model['svm']
+scaler = model['scaler']
+fastmap = model['fastmap']
+```
 
-1.  **Feature Engineering:**
-    * Converted `(600, 3)` time-series data $\rightarrow$ Log-Magnitude FFT Spectrograms.
-    * This created a shift-invariant feature set that robustly separates event types.
+## TensorBoard
 
-2.  **FastMap Optimization:**
-    * **Distance Metric:** Switched to **Euclidean Distance** on the FFT log-magnitudes.
-    * **Dimensions ($k$):** Increased $k$ from `10` to **`60`**. The frequency data contains dense information; increasing dimensions allowed FastMap to preserve subtle spectral details lost in lower projections.
+Training metrics are logged to `output/tb_logs/`. To view:
+```bash
+tensorboard --logdir output/tb_logs
+```
 
-3.  **Classifier Tuning (SVM):**
-    * Performed an aggressive Grid Search on the SVM.
-    * **High Regularization ($C$):** Unlocked high $C$ values (`10,000` - `50,000`), allowing the SVM to draw tighter, more precise decision boundaries around the complex frequency clusters.
+Logged metrics:
+- Validation accuracy per grid search combination
+- Test accuracy and per-class F1 scores (Earthquake/Explosion)
+- Hyperparameter configurations via the HParams dashboard
 
-### Final Results
-* **Baseline (Raw Time Data):** ~62.8% Accuracy
-* **FastMap (Time Correlation):** ~66.7% Accuracy
-* **FastMap (Frequency Domain + $k=60$):** **91.0% Accuracy** 🏆
+## How to Run
 
+### 1. Install Dependencies
+```bash
+pip install -r requirements.txt
+```
 
+### 2. Place Data
+Put the HDF5 files in the `data/` directory:
+- `dataset_train.h5`
+- `dataset_val.h5`
+- `dataset_test.h5`
 
-What Worked:
+### 3. Configure
+Edit `src/config.py` to set distance metrics, dimensions, and SVM grid search parameters.
 
-    Switching to Frequency Domain (FFT) 🏆
+### 4. Run Experiments
+```bash
+python -m src.main
+```
 
-        Why: This was the game-changer. By converting signals to Log-Magnitude Spectrograms, we made the model Shift-Invariant. It stopped caring when the event happened and focused on what the energy looked like.
+### 5. Visualize Embeddings
+```bash
+python -m src.visualize
+```
 
-        Result: Accuracy jumped from ~66% to ~89% immediately.
+## Key Insight: The Frequency Domain Breakthrough
 
-    Increasing Dimensions (k=120)
+Initially, the model relied on raw time-series waveforms. Seismic events have variable start times, so standard distance metrics on raw data failed to account for time shifts — resulting in ~62% accuracy.
 
-        Why: The frequency data is complex (900+ features). Compressing it to only 10 dimensions (like we did initially) made the data too "blurry." Increasing to 120 allowed the model to see the fine "texture" differences between Earthquakes and Explosions.
+By converting signals to **FFT log-magnitude spectrograms**, we made the model **shift-invariant**: it focuses on spectral energy content rather than when the event started.
 
-        Result: Pushed accuracy from 89% to 92%.
+- **Explosions:** Higher frequency energy, sharp spectral peaks
+- **Earthquakes:** Lower frequency, distributed energy
 
-    High SVM Strictness (C=1000)
+This single change jumped accuracy from ~63% to 91%+.
 
-        Why: Because our high-k data was very detailed, we needed a "Strict Teacher." We forced the SVM to draw a very tight, precise boundary instead of a loose, sloppy one.
+### What Worked
+- **FFT conversion** — eliminated time-shift variability
+- **Higher dimensions (k=80–120)** — captured fine spectral details
+- **High SVM C values (1000–20000)** — tight decision boundaries for complex frequency clusters
+- **Ensemble voting** — improved stability and accuracy
 
-        Result: Reduced false positives and solidified the 92% score.
-
-❌ What Didn't Work :
-
-    Simple Frequency Filtering (High-Pass/Band-Pass)
-
-        The Attempt: We tried applying standard filters to the time-series data to remove low-frequency noise or isolate high frequencies (thinking explosions would stand out more).
-
-        Why it failed: It was a "Band-Aid" solution.
-
-            Overlap: Earthquakes and explosions share many frequencies; a hard filter cut out useful information from both.
-
-            Wrong Problem: Filtering didn't fix the Time-Shift issue. A cleaner wave that is still shifted in time is still "far away" in Euclidean distance.
-
-        Result: Minimal improvement; the model remained confused by the alignment.
-
-    Raw Time-Series Data
-
-        The Attempt: Feeding the raw 600 time-points directly into the model.
-
-        Why it failed: The Time-Shift Problem. If Earthquake A started at 1.0s and Earthquake B started at 1.5s, the model thought they were completely different events.
-
-        Result: Stuck at ~60-62% accuracy (basically random guessing).
-
-    Euclidean Distance on Time Data
-
-        The Attempt: Using standard geometry to measure the distance between raw waves.
-
-        Why it failed: Euclidean distance compares point-to-point. Because of the time shifts, the "peaks" didn't line up, resulting in massive, meaningless distance errors.
-
-        Result: ~53% accuracy (Worse than guessing).
+### What Didn't Work
+- **Frequency filtering (high-pass/band-pass)** — earthquakes and explosions share many frequencies; hard filters cut useful information
+- **Raw time-series data** — stuck at ~60% due to time-shift problem
+- **Euclidean distance on time data** — point-to-point comparison fails when peaks don't align
