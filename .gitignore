@@ -2,10 +2,7 @@
 data/
 
 # Output artifacts
-output/models/
-output/embeddings/
-output/tb_logs/
-output/plots/
+output/
 
 # Python
 __pycache__/

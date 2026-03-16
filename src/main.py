@@ -7,7 +7,7 @@ from sklearn.metrics import classification_report, accuracy_score, f1_score
 from sklearn.model_selection import GridSearchCV
 from sklearn.svm import SVC
 from sklearn.preprocessing import StandardScaler
-from torch.utils.tensorboard import SummaryWriter
+from tensorboardX import SummaryWriter
 
 from src.dataloader import load_data
 from src.classifier import FastMapSVMClassifier, BaselineClassifier

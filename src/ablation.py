@@ -14,7 +14,7 @@ from sklearn.svm import SVC
 from sklearn.preprocessing import StandardScaler, normalize
 from sklearn.model_selection import ParameterGrid
 from scipy.stats import mode
-from torch.utils.tensorboard import SummaryWriter
+from tensorboardX import SummaryWriter
 
 from src.dataloader import load_data
 from src.classifier import FastMapSVMClassifier, BaselineClassifier
@@ -98,7 +98,6 @@ def run_single_experiment(X_train, y_train, X_val, y_val, X_test, y_test,
     writer.add_hparams(
         {"dist": dist, "k": k, **{pk: str(pv) for pk, pv in best_params.items()}},
         {"hparam/val_acc": best_score, "hparam/test_acc": test_acc},
-        run_name=exp_name,
     )
 
     # Save model
@@ -209,6 +208,8 @@ def run_ablation():
     # --- Main ablation loop ---
     exp_idx = 0
     total = len(CONFIG['distances']) * len(CONFIG['dimensions']) * len(CONFIG['use_fft'])
+    exp_times = []
+    ablation_start = datetime.now()
     print(f"\nStarting ablation: {total} base experiments (x2 with ensemble)\n")
 
     for use_fft in CONFIG['use_fft']:
@@ -219,6 +220,8 @@ def run_ablation():
 
         for dist in CONFIG['distances']:
             for k in CONFIG['dimensions']:
+                exp_start = datetime.now()
+
                 # --- Single model ---
                 exp_name = f"ablation_{domain}_{dist}_k{k}_single"
                 print(f"\n=== [{exp_idx+1}/{total}] {exp_name} ===")
@@ -270,7 +273,25 @@ def run_ablation():
                     "best_params": {pk: str(pv) for pk, pv in best_params.items()},
                 })
 
+                # --- Progress tracking ---
+                exp_elapsed = (datetime.now() - exp_start).total_seconds()
+                exp_times.append(exp_elapsed)
                 exp_idx += 1
+
+                avg_time = sum(exp_times) / len(exp_times)
+                remaining = total - exp_idx
+                eta_seconds = avg_time * remaining
+                eta_min = eta_seconds / 60
+                total_elapsed = (datetime.now() - ablation_start).total_seconds()
+
+                print(f"\n  [PROGRESS] {exp_idx}/{total} done | "
+                      f"This: {exp_elapsed:.0f}s | Avg: {avg_time:.0f}s | "
+                      f"Elapsed: {total_elapsed/60:.1f}min | ETA: {eta_min:.1f}min remaining")
+
+                # Save partial summary after each experiment (resume-safe)
+                partial_path = os.path.join(CONFIG['output_dir'], "results", "ablation_summary_partial.json")
+                with open(partial_path, "w") as f:
+                    json.dump(summary, f, indent=4)
 
     # --- Save summary ---
     summary_path = os.path.join(CONFIG['output_dir'], "results", "ablation_summary.json")
