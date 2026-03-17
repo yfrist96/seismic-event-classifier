@@ -17,17 +17,19 @@ seismic-event-classifier/
 │   ├── dataset_val.h5                    # Validation split (1,444 samples)
 │   └── dataset_test.h5                   # Test split (1,327 samples)
 ├── output/
-│   └── ablation/
-│       ├── models/                       # Saved models (.joblib)
-│       ├── embeddings/                   # FastMap embeddings (.npy)
-│       ├── results/                      # Per-experiment JSON + ablation_summary.json
-│       ├── plots/                        # All comparison plots
-│       └── tb_logs/                      # TensorBoard logs
+│   ├── ablation/
+│   │   ├── models/                       # Saved models (.joblib)
+│   │   ├── embeddings/                   # FastMap embeddings (.npy)
+│   │   ├── results/                      # Per-experiment JSON + ablation_summary.json
+│   │   ├── plots/                        # Ablation comparison plots
+│   │   └── tb_logs/                      # TensorBoard logs
+│   └── decision_boundary_plots/          # Decision boundary & spectral analysis plots
 ├── src/
 │   ├── config.py                         # Main experiment configuration
 │   ├── ablation_config.py                # Ablation study configuration
 │   ├── ablation.py                       # Ablation study runner
 │   ├── plot_ablation.py                  # Plot generation from ablation results
+│   ├── plot_decision_boundary.py         # Decision boundary & spectral analysis plots
 │   ├── main.py                           # Single-config experiment runner
 │   ├── dataloader.py                     # HDF5 data loading
 │   ├── distances.py                      # 9 distance metric implementations
@@ -166,6 +168,21 @@ All plots are saved to `output/ablation/plots/` by running `python -m src.plot_a
 | `overall_ranking.png` | Top 15 experiments ranked |
 | `domain_gap.png` | FFT advantage in percentage points at each k |
 
+### Decision Boundary & Spectral Analysis
+
+Saved to `output/decision_boundary_plots/` by running `python -m src.plot_decision_boundary`:
+
+| Plot | Description |
+|------|-------------|
+| `tsne_clusters.png` | t-SNE of k=120 embeddings — class labels (left) and SVM confidence heatmap (right) |
+| `decision_histogram.png` | Distribution of SVM decision function values per class — shows class separation and misclassification rates |
+| `decision_boundary_best2dims.png` | SVM boundary on the 2 most discriminative FastMap dimensions |
+| `misclassified_tsne.png` | t-SNE with misclassified samples highlighted |
+| `average_spectra.png` | Mean FFT spectrum per class per channel (Z/N/E) with standard deviation bands |
+| `spectral_difference.png` | Explosion minus earthquake mean spectrum — shows which frequencies are discriminative |
+| `example_waveforms.png` | Single earthquake vs explosion raw waveform comparison |
+| `example_spectra.png` | FFT spectra of the same example events |
+
 ## How to Run
 
 ### Setup
@@ -186,10 +203,16 @@ python -m src.ablation
 
 Progress is printed with ETA after each experiment. Partial results are saved incrementally.
 
-### Generate Plots
+### Generate Ablation Plots
 
 ```bash
 python -m src.plot_ablation
+```
+
+### Generate Decision Boundary & Spectral Plots
+
+```bash
+python -m src.plot_decision_boundary
 ```
 
 ### Run Single Experiment
