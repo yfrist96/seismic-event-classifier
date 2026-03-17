@@ -262,4 +262,4 @@ fastmap = model['fastmap']
 
 - Yehuda Frist
 - Yossi Partouche
-- Ido Sugavker
+- Ido Sogavker
