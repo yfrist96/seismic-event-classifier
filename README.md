@@ -36,7 +36,7 @@ seismic-event-classifier/
 │   ├── fastmap.py                        # FastMap algorithm
 │   ├── classifier.py                     # FastMapSVM + Baseline classifiers
 │   └── visualize.py                      # Embedding visualization (2D, t-SNE)
-├── Colab_Results.ipynb                   # Early Colab experiments
+├── README.md
 ├── requirements.txt
 └── .gitignore
 ```
@@ -257,3 +257,9 @@ fastmap = model['fastmap']
 
 - Python 3.12+
 - numpy, h5py, scikit-learn, scipy, matplotlib, tensorboard, tensorboardX, joblib
+
+## Authors
+
+- Yehuda Frist
+- Yossi Partouche
+- Ido Sugavker
