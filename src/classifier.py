@@ -115,7 +115,7 @@ class FastMapSVMClassifier:
             return self.calibrator.predict(decision_vals)
         return self.svm.predict(X_scaled)
 
-""" this is the basleine classifer to show we ahve better results using the fastmap + svm approach """
+""" this is the basleine classifer to show we have better results using the fastmap + svm approach """
 class BaselineClassifier:
     """
     Random Forest on statistical features (Mean, Std, Max, Min).
