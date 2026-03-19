@@ -26,6 +26,12 @@ DATA_DIR = os.path.join(PROJECT_ROOT, "data")
 PLOT_DIR = os.path.join(PROJECT_ROOT, "output", "decision_boundary_plots")
 
 
+def save_figure(fig, path_without_ext):
+    """Save figure as both PNG (300 DPI) and PDF (vector)."""
+    fig.savefig(path_without_ext + ".png", dpi=300, bbox_inches='tight')
+    fig.savefig(path_without_ext + ".pdf", bbox_inches='tight')
+
+
 def to_frequency_domain(X):
     X_fft = np.fft.rfft(X, axis=1)
     X_mag = np.abs(X_fft)
@@ -104,9 +110,9 @@ def plot_tsne_clusters(X_emb_scaled, y, decision_vals, save_dir):
 
     plt.suptitle('t-SNE of k=120 FastMap Embeddings (FFT + Euclidean)', fontsize=14, fontweight='bold')
     plt.tight_layout()
-    plt.savefig(os.path.join(save_dir, "tsne_clusters.png"), dpi=150)
+    save_figure(fig, os.path.join(save_dir, "tsne_clusters"))
     plt.close()
-    print("  Saved: tsne_clusters.png")
+    print("  Saved: tsne_clusters.png/pdf")
 
     return X_tsne
 
@@ -144,9 +150,9 @@ def plot_decision_function_histogram(decision_vals, y, save_dir):
     ax.grid(alpha=0.3)
 
     plt.tight_layout()
-    plt.savefig(os.path.join(save_dir, "decision_histogram.png"), dpi=150)
+    save_figure(fig, os.path.join(save_dir, "decision_histogram"))
     plt.close()
-    print("  Saved: decision_histogram.png")
+    print("  Saved: decision_histogram.png/pdf")
 
 
 def plot_best_2_dims(X_emb, y, save_dir):
@@ -186,9 +192,9 @@ def plot_best_2_dims(X_emb, y, save_dir):
     plt.suptitle('Decision Boundary on Best 2 of 120 FastMap Dimensions',
                  fontsize=14, fontweight='bold')
     plt.tight_layout()
-    plt.savefig(os.path.join(save_dir, "decision_boundary_best2dims.png"), dpi=150)
+    save_figure(fig, os.path.join(save_dir, "decision_boundary_best2dims"))
     plt.close()
-    print(f"  Saved: decision_boundary_best2dims.png (dims {d1+1} & {d2+1})")
+    print(f"  Saved: decision_boundary_best2dims.png/pdf (dims {d1+1} & {d2+1})")
 
 
 def plot_misclassified_on_tsne(X_tsne, y, y_pred, save_dir):
@@ -218,9 +224,9 @@ def plot_misclassified_on_tsne(X_tsne, y, y_pred, save_dir):
     ax.grid(alpha=0.2)
 
     plt.tight_layout()
-    plt.savefig(os.path.join(save_dir, "misclassified_tsne.png"), dpi=150)
+    save_figure(fig, os.path.join(save_dir, "misclassified_tsne"))
     plt.close()
-    print("  Saved: misclassified_tsne.png")
+    print("  Saved: misclassified_tsne.png/pdf")
 
 
 def plot_average_spectra(X_train_raw, y_train, save_dir):
@@ -260,9 +266,9 @@ def plot_average_spectra(X_train_raw, y_train, save_dir):
     plt.suptitle('Average FFT Spectrum: Earthquake vs Explosion',
                  fontsize=14, fontweight='bold')
     plt.tight_layout()
-    plt.savefig(os.path.join(save_dir, "average_spectra.png"), dpi=150)
+    save_figure(fig, os.path.join(save_dir, "average_spectra"))
     plt.close()
-    print("  Saved: average_spectra.png")
+    print("  Saved: average_spectra.png/pdf")
 
 
 def plot_spectral_difference(X_train_raw, y_train, save_dir):
@@ -295,9 +301,9 @@ def plot_spectral_difference(X_train_raw, y_train, save_dir):
     ax.grid(alpha=0.3)
 
     plt.tight_layout()
-    plt.savefig(os.path.join(save_dir, "spectral_difference.png"), dpi=150)
+    save_figure(fig, os.path.join(save_dir, "spectral_difference"))
     plt.close()
-    print("  Saved: spectral_difference.png")
+    print("  Saved: spectral_difference.png/pdf")
 
 
 def plot_example_waveforms(X_train_raw, y_train, save_dir):
@@ -329,9 +335,9 @@ def plot_example_waveforms(X_train_raw, y_train, save_dir):
     plt.suptitle('Example Waveforms: Earthquake vs Explosion',
                  fontsize=14, fontweight='bold')
     plt.tight_layout()
-    plt.savefig(os.path.join(save_dir, "example_waveforms.png"), dpi=150)
+    save_figure(fig, os.path.join(save_dir, "example_waveforms"))
     plt.close()
-    print("  Saved: example_waveforms.png")
+    print("  Saved: example_waveforms.png/pdf")
 
 
 def plot_example_spectra(X_train_raw, y_train, save_dir):
@@ -365,9 +371,9 @@ def plot_example_spectra(X_train_raw, y_train, save_dir):
     plt.suptitle('Example FFT Spectra: Earthquake vs Explosion',
                  fontsize=14, fontweight='bold')
     plt.tight_layout()
-    plt.savefig(os.path.join(save_dir, "example_spectra.png"), dpi=150)
+    save_figure(fig, os.path.join(save_dir, "example_spectra"))
     plt.close()
-    print("  Saved: example_spectra.png")
+    print("  Saved: example_spectra.png/pdf")
 
 
 if __name__ == "__main__":

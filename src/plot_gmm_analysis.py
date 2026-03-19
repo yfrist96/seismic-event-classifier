@@ -27,6 +27,12 @@ DATA_DIR = os.path.join(PROJECT_ROOT, "data")
 PLOT_DIR = os.path.join(PROJECT_ROOT, "output", "decision_boundary_plots")
 
 
+def save_figure(fig, path_without_ext):
+    """Save figure as both PNG (300 DPI) and PDF (vector)."""
+    fig.savefig(path_without_ext + ".png", dpi=300, bbox_inches='tight')
+    fig.savefig(path_without_ext + ".pdf", bbox_inches='tight')
+
+
 def to_frequency_domain(X):
     X_fft = np.fft.rfft(X, axis=1)
     X_mag = np.abs(X_fft)
@@ -368,10 +374,10 @@ def plot_decision_function_analysis(decision_vals, y, save_dir):
             bbox=dict(boxstyle='round,pad=0.5', facecolor='#f8f9fa', edgecolor='#dee2e6'))
 
     plt.tight_layout(rect=[0, 0, 1, 0.96])
-    save_path = os.path.join(save_dir, "decision_function_analysis.png")
-    plt.savefig(save_path, dpi=150)
+    save_path = os.path.join(save_dir, "decision_function_analysis")
+    save_figure(fig, save_path)
     plt.close()
-    print(f"\n  Saved: {save_path}")
+    print(f"\n  Saved: {save_path}.png/pdf")
 
 
 if __name__ == "__main__":

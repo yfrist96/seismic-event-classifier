@@ -16,6 +16,12 @@ PLOT_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__
                         "output", "ablation", "plots")
 
 
+def save_figure(fig, path_without_ext):
+    """Save figure as both PNG (300 DPI) and PDF (vector)."""
+    fig.savefig(path_without_ext + ".png", dpi=300, bbox_inches='tight')
+    fig.savefig(path_without_ext + ".pdf", bbox_inches='tight')
+
+
 def load_summary():
     with open(SUMMARY_PATH, "r") as f:
         data = json.load(f)
@@ -73,9 +79,9 @@ def plot_fft_vs_time(experiments, baseline, save_dir):
     ax.grid(axis='y', alpha=0.3)
 
     plt.tight_layout()
-    plt.savefig(os.path.join(save_dir, "fft_vs_time.png"), dpi=150)
+    save_figure(plt.gcf(), os.path.join(save_dir, "fft_vs_time"))
     plt.close()
-    print("  Saved: fft_vs_time.png")
+    print("  Saved: fft_vs_time.png/pdf")
 
 
 def plot_accuracy_vs_k(experiments, baseline, save_dir):
@@ -110,9 +116,9 @@ def plot_accuracy_vs_k(experiments, baseline, save_dir):
 
     plt.suptitle('Test Accuracy vs FastMap Dimensions (FFT Domain)', fontsize=14, fontweight='bold')
     plt.tight_layout()
-    plt.savefig(os.path.join(save_dir, "accuracy_vs_k_fft.png"), dpi=150)
+    save_figure(plt.gcf(), os.path.join(save_dir, "accuracy_vs_k_fft"))
     plt.close()
-    print("  Saved: accuracy_vs_k_fft.png")
+    print("  Saved: accuracy_vs_k_fft.png/pdf")
 
 
 def plot_accuracy_vs_k_time(experiments, baseline, save_dir):
@@ -147,9 +153,9 @@ def plot_accuracy_vs_k_time(experiments, baseline, save_dir):
 
     plt.suptitle('Test Accuracy vs FastMap Dimensions (Time Domain)', fontsize=14, fontweight='bold')
     plt.tight_layout()
-    plt.savefig(os.path.join(save_dir, "accuracy_vs_k_time.png"), dpi=150)
+    save_figure(plt.gcf(), os.path.join(save_dir, "accuracy_vs_k_time"))
     plt.close()
-    print("  Saved: accuracy_vs_k_time.png")
+    print("  Saved: accuracy_vs_k_time.png/pdf")
 
 
 def plot_single_vs_ensemble(experiments, save_dir):
@@ -190,7 +196,7 @@ def plot_single_vs_ensemble(experiments, save_dir):
     ax.set_aspect('equal')
 
     plt.tight_layout()
-    plt.savefig(os.path.join(save_dir, "single_vs_ensemble.png"), dpi=150)
+    save_figure(plt.gcf(), os.path.join(save_dir, "single_vs_ensemble"))
     plt.close()
     print("  Saved: single_vs_ensemble.png")
 
@@ -228,7 +234,7 @@ def plot_ensemble_gain(experiments, save_dir):
     ax.axhline(y=0, color='black', linewidth=0.5)
 
     plt.tight_layout()
-    plt.savefig(os.path.join(save_dir, "ensemble_gain.png"), dpi=150)
+    save_figure(plt.gcf(), os.path.join(save_dir, "ensemble_gain"))
     plt.close()
     print("  Saved: ensemble_gain.png")
 
@@ -285,7 +291,7 @@ def plot_f1_per_class(experiments, baseline, save_dir):
     ax.grid(axis='y', alpha=0.3)
 
     plt.tight_layout()
-    plt.savefig(os.path.join(save_dir, "f1_per_class.png"), dpi=150)
+    save_figure(plt.gcf(), os.path.join(save_dir, "f1_per_class"))
     plt.close()
     print("  Saved: f1_per_class.png")
 
@@ -323,7 +329,7 @@ def plot_heatmap_fft(experiments, save_dir):
 
         plt.colorbar(im, ax=ax, label='Test Accuracy')
         plt.tight_layout()
-        plt.savefig(os.path.join(save_dir, f"heatmap_fft_{model_type}.png"), dpi=150)
+        save_figure(plt.gcf(), os.path.join(save_dir, f"heatmap_fft_{model_type}"))
         plt.close()
         print(f"  Saved: heatmap_fft_{model_type}.png")
 
@@ -360,7 +366,7 @@ def plot_heatmap_time(experiments, save_dir):
 
         plt.colorbar(im, ax=ax, label='Test Accuracy')
         plt.tight_layout()
-        plt.savefig(os.path.join(save_dir, f"heatmap_time_{model_type}.png"), dpi=150)
+        save_figure(plt.gcf(), os.path.join(save_dir, f"heatmap_time_{model_type}"))
         plt.close()
         print(f"  Saved: heatmap_time_{model_type}.png")
 
@@ -391,7 +397,7 @@ def plot_val_vs_test(experiments, save_dir):
     ax.set_aspect('equal')
 
     plt.tight_layout()
-    plt.savefig(os.path.join(save_dir, "val_vs_test.png"), dpi=150)
+    save_figure(plt.gcf(), os.path.join(save_dir, "val_vs_test"))
     plt.close()
     print("  Saved: val_vs_test.png")
 
@@ -434,7 +440,7 @@ def plot_overall_ranking(experiments, baseline, save_dir):
     ax.legend(handles=legend_elements, loc='lower right')
 
     plt.tight_layout()
-    plt.savefig(os.path.join(save_dir, "overall_ranking.png"), dpi=150)
+    save_figure(plt.gcf(), os.path.join(save_dir, "overall_ranking"))
     plt.close()
     print("  Saved: overall_ranking.png")
 
@@ -468,7 +474,7 @@ def plot_domain_gap(experiments, save_dir):
     ax.set_xticks(k_values)
 
     plt.tight_layout()
-    plt.savefig(os.path.join(save_dir, "domain_gap.png"), dpi=150)
+    save_figure(plt.gcf(), os.path.join(save_dir, "domain_gap"))
     plt.close()
     print("  Saved: domain_gap.png")
 

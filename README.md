@@ -9,6 +9,17 @@ A machine learning system for classifying seismic events as **Earthquakes** or *
 - Conduct a systematic ablation study across distance metrics, embedding dimensions, and ensemble methods
 - Perform deep statistical analysis of the SVM decision function as a Gaussian mixture, with Bayes-optimal threshold calibration
 
+## Key Results
+
+### Spectral Signatures by Event Type
+![Average Spectra](output/decision_boundary_plots/average_spectra.png)
+
+### Ablation Study: Top 15 Configurations
+![Overall Ranking](output/ablation/plots/overall_ranking.png)
+
+### Statistical Analysis of SVM Decision Function
+![Decision Function Analysis](output/decision_boundary_plots/decision_function_analysis.png)
+
 ## Project Structure
 
 ```text
