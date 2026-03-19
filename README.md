@@ -37,18 +37,15 @@ seismic-event-classifier/
 │   │   └── tb_logs/                      # TensorBoard logs
 │   └── decision_boundary_plots/          # Decision boundary & spectral analysis plots
 ├── src/
-│   ├── config.py                         # Main experiment configuration
 │   ├── ablation_config.py                # Ablation study configuration
 │   ├── ablation.py                       # Ablation study runner
 │   ├── plot_ablation.py                  # Plot generation from ablation results
 │   ├── plot_decision_boundary.py         # Decision boundary & spectral analysis plots
 │   ├── plot_gmm_analysis.py             # GMM statistical analysis of decision function
-│   ├── main.py                           # Single-config experiment runner
 │   ├── dataloader.py                     # HDF5 data loading
 │   ├── distances.py                      # 9 distance metric implementations
 │   ├── fastmap.py                        # FastMap algorithm
-│   ├── classifier.py                     # FastMapSVM + BayesThresholdCalibrator + Baseline
-│   └── visualize.py                      # Embedding visualization (2D, t-SNE)
+│   └── classifier.py                     # FastMapSVM + BayesThresholdCalibrator + Baseline
 ├── README.md
 ├── requirements.txt
 └── .gitignore
@@ -304,14 +301,6 @@ python -m src.plot_decision_boundary
 
 ```bash
 python -m src.plot_gmm_analysis
-```
-
-### Run Single Experiment
-
-Edit `src/config.py` to set your desired configuration, then:
-
-```bash
-python -m src.main
 ```
 
 ### TensorBoard
