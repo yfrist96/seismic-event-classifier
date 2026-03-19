@@ -9,17 +9,6 @@ A machine learning system for classifying seismic events as **Earthquakes** or *
 - Conduct a systematic ablation study across distance metrics, embedding dimensions, and ensemble methods
 - Perform deep statistical analysis of the SVM decision function as a Gaussian mixture, with Bayes-optimal threshold calibration
 
-## Key Results
-
-### Spectral Signatures by Event Type
-![Average Spectra](figures/average_spectra.png)
-
-### Ablation Study: Top 15 Configurations
-![Overall Ranking](figures/overall_ranking.png)
-
-### Statistical Analysis of SVM Decision Function
-![Decision Function Analysis](figures/decision_function_analysis.png)
-
 ## Project Structure
 
 ```text
@@ -89,6 +78,8 @@ Raw Seismic Data (N, 600, 3)     600 timesteps x 3 channels (Z, N, E)
 
 After selecting the best hyperparameters on the validation set, the model is retrained on **train + val combined** before evaluating on test. The test set is never seen during tuning.
 
+![Average Spectra](figures/average_spectra.png)
+
 ## Ablation Study
 
 We swept across 4 axes to isolate the contribution of each design choice:
@@ -112,6 +103,8 @@ We swept across 4 axes to isolate the contribution of each design choice:
 | 4 | FFT + Euclidean, k=120, single | 91.64% | 91.62% |
 | 5 | FFT + Euclidean, k=80, single | 91.03% | 90.86% |
 | - | Baseline (Random Forest) | 62.62% | 64.54% |
+
+![Overall Ranking](figures/overall_ranking.png)
 
 ### Key Findings
 
@@ -175,6 +168,8 @@ We fit individual Gaussians to each class's decision function values and separat
 | Mean (mu) | -1.12 | +1.06 |
 | Std (sigma) | 0.77 | 0.73 |
 | n | 565 | 762 |
+
+![Decision Function Analysis](figures/decision_function_analysis.png)
 
 **The unsupervised GMM recovers the class structure without labels.** The 2-component GMM (fitted on unlabeled decision values) finds components at mu=-1.17 and mu=+1.07 with weights 0.42/0.58 -- nearly identical to the supervised fits and the true class proportions (42.6%/57.4%). This confirms that the class separation in the SVM's decision space is intrinsic to the data, not an artifact of the classifier.
 
