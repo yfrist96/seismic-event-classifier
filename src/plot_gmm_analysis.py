@@ -159,7 +159,7 @@ def plot_decision_function_analysis(decision_vals, y, save_dir):
     x_grid = np.linspace(decision_vals.min() - 1, decision_vals.max() + 1, 5000)
     pdf_eq = prior_eq * norm.pdf(x_grid, mu_eq, sigma_eq)
     pdf_ex = prior_ex * norm.pdf(x_grid, mu_ex, sigma_ex)
-    overlap = np.trapezoid(np.minimum(pdf_eq, pdf_ex), x_grid)
+    overlap = np.trapz(np.minimum(pdf_eq, pdf_ex), x_grid)
 
     misclass_eq = np.mean(eq_vals > 0)
     misclass_ex = np.mean(ex_vals < 0)
@@ -398,6 +398,7 @@ if __name__ == "__main__":
 
     # Train k=120 FastMap model
     print("Training k=120 FastMap model...")
+    np.random.seed(42)
     model = FastMapSVMClassifier(k=120, dist_func='euclidean')
     X_trainval_emb = model.fastmap.fit_transform(X_trainval_fft)
     X_test_emb = model.fastmap.transform(X_test_fft)
