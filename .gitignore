@@ -33,4 +33,4 @@ Thumbs.db
 .ipynb_checkpoints/
 
 # Paper (managed in Overleaf)
-paper.tex
+paper/
