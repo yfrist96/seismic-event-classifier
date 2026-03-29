@@ -198,7 +198,7 @@ def plot_single_vs_ensemble(experiments, save_dir):
     plt.tight_layout()
     save_figure(plt.gcf(), os.path.join(save_dir, "single_vs_ensemble"))
     plt.close()
-    print("  Saved: single_vs_ensemble.png")
+    print("  Saved: single_vs_ensemble.png/pdf")
 
 
 def plot_ensemble_gain(experiments, save_dir):
@@ -236,7 +236,7 @@ def plot_ensemble_gain(experiments, save_dir):
     plt.tight_layout()
     save_figure(plt.gcf(), os.path.join(save_dir, "ensemble_gain"))
     plt.close()
-    print("  Saved: ensemble_gain.png")
+    print("  Saved: ensemble_gain.png/pdf")
 
 
 def plot_f1_per_class(experiments, baseline, save_dir):
@@ -293,7 +293,7 @@ def plot_f1_per_class(experiments, baseline, save_dir):
     plt.tight_layout()
     save_figure(plt.gcf(), os.path.join(save_dir, "f1_per_class"))
     plt.close()
-    print("  Saved: f1_per_class.png")
+    print("  Saved: f1_per_class.png/pdf")
 
 
 def plot_heatmap_fft(experiments, save_dir):
@@ -331,7 +331,7 @@ def plot_heatmap_fft(experiments, save_dir):
         plt.tight_layout()
         save_figure(plt.gcf(), os.path.join(save_dir, f"heatmap_fft_{model_type}"))
         plt.close()
-        print(f"  Saved: heatmap_fft_{model_type}.png")
+        print(f"  Saved: heatmap_fft_{model_type}.png/pdf")
 
 
 def plot_heatmap_time(experiments, save_dir):
@@ -368,7 +368,7 @@ def plot_heatmap_time(experiments, save_dir):
         plt.tight_layout()
         save_figure(plt.gcf(), os.path.join(save_dir, f"heatmap_time_{model_type}"))
         plt.close()
-        print(f"  Saved: heatmap_time_{model_type}.png")
+        print(f"  Saved: heatmap_time_{model_type}.png/pdf")
 
 
 def plot_val_vs_test(experiments, save_dir):
@@ -399,7 +399,7 @@ def plot_val_vs_test(experiments, save_dir):
     plt.tight_layout()
     save_figure(plt.gcf(), os.path.join(save_dir, "val_vs_test"))
     plt.close()
-    print("  Saved: val_vs_test.png")
+    print("  Saved: val_vs_test.png/pdf")
 
 
 def plot_overall_ranking(experiments, baseline, save_dir):
@@ -442,7 +442,7 @@ def plot_overall_ranking(experiments, baseline, save_dir):
     plt.tight_layout()
     save_figure(plt.gcf(), os.path.join(save_dir, "overall_ranking"))
     plt.close()
-    print("  Saved: overall_ranking.png")
+    print("  Saved: overall_ranking.png/pdf")
 
 
 def plot_domain_gap(experiments, save_dir):
@@ -476,7 +476,7 @@ def plot_domain_gap(experiments, save_dir):
     plt.tight_layout()
     save_figure(plt.gcf(), os.path.join(save_dir, "domain_gap"))
     plt.close()
-    print("  Saved: domain_gap.png")
+    print("  Saved: domain_gap.png/pdf")
 
 
 if __name__ == "__main__":

@@ -396,6 +396,7 @@ if __name__ == "__main__":
 
     # --- Build the full k=120 model (used by multiple plots) ---
     print("  Training k=120 FastMap model...")
+    np.random.seed(42)
     model = FastMapSVMClassifier(k=120, dist_func='euclidean')
     X_trainval_emb = model.fastmap.fit_transform(X_trainval_fft)
     X_test_emb = model.fastmap.transform(X_test_fft)

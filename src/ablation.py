@@ -14,8 +14,6 @@ from sklearn.svm import SVC
 from sklearn.preprocessing import StandardScaler, normalize
 from sklearn.model_selection import ParameterGrid
 from scipy.stats import mode
-from tensorboardX import SummaryWriter
-
 from src.dataloader import load_data
 from src.classifier import FastMapSVMClassifier, BaselineClassifier
 from src.ablation_config import ABLATION_CONFIG as CONFIG
@@ -34,7 +32,7 @@ def flatten_time_domain(X):
 
 
 def run_single_experiment(X_train, y_train, X_val, y_val, X_test, y_test,
-                          dist, k, writer, exp_name, exp_idx):
+                          dist, k, exp_name, exp_idx):
     """Run a single FastMap+SVM experiment: tune on val, retrain on train+val, eval on test."""
     temp_model = FastMapSVMClassifier(k=k, dist_func=dist)
 
@@ -66,7 +64,6 @@ def run_single_experiment(X_train, y_train, X_val, y_val, X_test, y_test,
         clf = SVC(**params)
         clf.fit(X_train_scaled, y_train)
         val_score = accuracy_score(y_val, clf.predict(X_val_scaled))
-        writer.add_scalar(f"{exp_name}/grid_search_val_acc", val_score, i)
         if val_score > best_score:
             best_score = val_score
             best_params = params
@@ -90,16 +87,6 @@ def run_single_experiment(X_train, y_train, X_val, y_val, X_test, y_test,
     test_acc = report['accuracy']
     print(f"  [RESULT] Test Accuracy: {test_acc:.4f}")
 
-    # Log to TensorBoard
-    writer.add_scalar(f"{exp_name}/val_accuracy", best_score, exp_idx)
-    writer.add_scalar(f"{exp_name}/test_accuracy", test_acc, exp_idx)
-    writer.add_scalar(f"{exp_name}/test_f1_eq", report['0']['f1-score'], exp_idx)
-    writer.add_scalar(f"{exp_name}/test_f1_ex", report['1']['f1-score'], exp_idx)
-    writer.add_hparams(
-        {"dist": dist, "k": k, **{pk: str(pv) for pk, pv in best_params.items()}},
-        {"hparam/val_acc": best_score, "hparam/test_acc": test_acc},
-    )
-
     # Save model
     model_path = os.path.join(CONFIG['output_dir'], "models", f"{exp_name}.joblib")
     joblib.dump({
@@ -115,7 +102,7 @@ def run_single_experiment(X_train, y_train, X_val, y_val, X_test, y_test,
 
 
 def run_ensemble(X_train, y_train, X_val, y_val, X_test, y_test,
-                 dist, k, best_params, n_models, writer, exp_name, exp_idx):
+                 dist, k, best_params, n_models, exp_name, exp_idx):
     """Run ensemble of n_models FastMap+SVM voters with majority vote."""
     X_trainval = np.vstack([X_train, X_val])
     y_trainval = np.concatenate([y_train, y_val])
@@ -143,21 +130,14 @@ def run_ensemble(X_train, y_train, X_val, y_val, X_test, y_test,
     ensemble_acc = report['accuracy']
     print(f"  [Ensemble RESULT] Test Accuracy: {ensemble_acc:.4f}")
 
-    writer.add_scalar(f"{exp_name}/test_accuracy", ensemble_acc, exp_idx)
-    writer.add_scalar(f"{exp_name}/test_f1_eq", report['0']['f1-score'], exp_idx)
-    writer.add_scalar(f"{exp_name}/test_f1_ex", report['1']['f1-score'], exp_idx)
-
     return report
 
 
 def run_ablation():
+    np.random.seed(42)
     # Setup directories
     for subdir in ["models", "results", "embeddings"]:
         os.makedirs(os.path.join(CONFIG['output_dir'], subdir), exist_ok=True)
-
-    log_dir = os.path.join(CONFIG['output_dir'], "tb_logs", datetime.now().strftime("%Y%m%d-%H%M%S"))
-    writer = SummaryWriter(log_dir)
-    print(f"TensorBoard logs: {log_dir}")
 
     # Load data
     print(f"Loading Data from: {CONFIG['data_dir']}...")
@@ -186,8 +166,6 @@ def run_ablation():
     base_report = classification_report(y_test, y_pred_test, output_dict=True)
     print(f"  Val: {base_val_acc:.4f} | Test: {base_report['accuracy']:.4f}")
 
-    writer.add_scalar("baseline/val_accuracy", base_val_acc, 0)
-    writer.add_scalar("baseline/test_accuracy", base_report['accuracy'], 0)
     with open(os.path.join(CONFIG['output_dir'], "results", "baseline_report.json"), "w") as f:
         json.dump(base_report, f, indent=4)
 
@@ -228,7 +206,7 @@ def run_ablation():
 
                 report, best_params, val_acc = run_single_experiment(
                     X_train, y_train, X_val, y_val, X_test, y_test,
-                    dist, k, writer, exp_name, exp_idx,
+                    dist, k, exp_name, exp_idx,
                 )
 
                 with open(os.path.join(CONFIG['output_dir'], "results", f"{exp_name}_report.json"), "w") as f:
@@ -254,7 +232,7 @@ def run_ablation():
                 ens_report = run_ensemble(
                     X_train, y_train, X_val, y_val, X_test, y_test,
                     dist, k, best_params, CONFIG['ensemble_n_models'],
-                    writer, ens_name, exp_idx,
+                    ens_name, exp_idx,
                 )
 
                 with open(os.path.join(CONFIG['output_dir'], "results", f"{ens_name}_report.json"), "w") as f:
@@ -309,9 +287,7 @@ def run_ablation():
               f"{row['val_accuracy']:>7.4f} {row['test_accuracy']:>7.4f} "
               f"{row['test_f1_eq']:>7.4f} {row['test_f1_ex']:>7.4f}")
 
-    writer.close()
-    print(f"\nTensorBoard: tensorboard --logdir {CONFIG['output_dir']}/tb_logs")
-    print(f"Summary saved to: {summary_path}")
+    print(f"\nSummary saved to: {summary_path}")
 
 
 if __name__ == "__main__":
