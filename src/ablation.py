@@ -134,7 +134,6 @@ def run_ensemble(X_train, y_train, X_val, y_val, X_test, y_test,
 
 
 def run_ablation():
-    np.random.seed(42)
     # Setup directories
     for subdir in ["models", "results", "embeddings"]:
         os.makedirs(os.path.join(CONFIG['output_dir'], subdir), exist_ok=True)

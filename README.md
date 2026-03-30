@@ -96,11 +96,11 @@ We swept across 4 axes to isolate the contribution of each design choice:
 
 | Rank | Config | Test Acc | Val Acc |
 |------|--------|----------|---------|
-| 1 | FFT + Euclidean, k=120, single | **92.77%** | 91.41% |
-| 2 | FFT + Euclidean, k=120, ensemble | 92.69% | 91.41% |
-| 3 | FFT + Euclidean, k=60, ensemble | 92.09% | 88.64% |
-| 4 | FFT + Euclidean, k=80, ensemble | 91.79% | 90.86% |
-| 5 | FFT + Euclidean, k=80, single | 91.03% | 90.86% |
+| 1 | FFT + Euclidean, k=120, ensemble | **93.90%** | 91.20% |
+| 2 | FFT + Euclidean, k=80, ensemble | 92.99% | 89.75% |
+| 3 | FFT + Euclidean, k=120, single | 92.31% | 91.20% |
+| 4 | FFT + Euclidean, k=60, ensemble | 92.24% | 88.64% |
+| 5 | FFT + Euclidean, k=80, single | 91.26% | 89.75% |
 | - | Baseline (Random Forest) | 62.62% | 64.54% |
 
 ![Overall Ranking](figures/overall_ranking.png)
@@ -109,7 +109,7 @@ We swept across 4 axes to isolate the contribution of each design choice:
 
 **1. FFT is the single most important factor**
 
-FFT features outperform time-domain features by 4-21 percentage points across most distance metrics and k values. The best time-domain result (Lorentzian, k=120, ensemble: 80.26%) is still far below the worst competitive FFT result.
+FFT features outperform time-domain features by 5-22 percentage points across most distance metrics and k values. The best time-domain result (Lorentzian, k=120, ensemble: 79.73%) is still far below the worst competitive FFT result.
 
 This works because FFT makes the representation **shift-invariant** -- seismic events have variable arrival times, so time-domain distances are dominated by alignment noise. FFT captures *what* energy is present, not *when* it arrives.
 
@@ -117,30 +117,30 @@ This works because FFT makes the representation **shift-invariant** -- seismic e
 
 | Distance | Best Test Acc (ensemble) |
 |----------|------------------------|
-| Euclidean | 92.69% |
-| Canberra | 89.22% |
-| Lorentzian | 85.68% |
+| Euclidean | 93.90% |
+| Canberra | 89.15% |
+| Lorentzian | 86.51% |
 
-Euclidean outperforms alternatives by 2-9% in the FFT domain. Lorentzian and Canberra, which were designed for robustness to outliers and relative differences, don't help when the features are already well-normalized by the FFT+L2 pipeline.
+Euclidean outperforms alternatives by 1-9% in the FFT domain. Lorentzian and Canberra, which were designed for robustness to outliers and relative differences, don't help when the features are already well-normalized by the FFT+L2 pipeline.
 
 **3. More dimensions help, with diminishing returns**
 
 | k | Euclidean FFT (ensemble) |
 |---|--------------------------|
-| 2 | 59.01% |
-| 10 | 86.21% |
+| 2 | 61.19% |
+| 10 | 87.19% |
 | 30 | 90.66% |
-| 60 | 92.09% |
-| 80 | 91.79% |
-| 120 | 92.69% |
+| 60 | 92.24% |
+| 80 | 92.99% |
+| 120 | 93.90% |
 
 k=2 is essentially useless. The jump from k=10 to k=30 is large (+4.5%), then gains taper off. k=80-120 is the sweet spot.
 
 Notably, Lorentzian *degrades* at higher k (peaks at k=30, drops at k=60+), suggesting it doesn't scale well with many dimensions.
 
-**4. Ensemble helps most on weaker configs**
+**4. Ensemble consistently improves accuracy**
 
-Ensemble voting (5 independent FastMap projections with different random pivots) improves accuracy for most configurations, with gains of up to 7.5 percentage points (Canberra at k=80). The benefit is largest for weaker distance metrics; for Euclidean at high k, the gain is negligible as a single model already achieves near-optimal performance.
+Ensemble voting (5 independent FastMap projections with different random pivots) consistently improves accuracy by 1-7.5 percentage points. For Euclidean distance, the gain is a steady 1.5-3pp across all k values. For weaker metrics like Lorentzian, gains reach up to 7.5pp (at k=80), as ensemble voting compensates for suboptimal pivot selection.
 
 **5. Validation accuracy tracks test accuracy well**
 
@@ -148,15 +148,15 @@ The val-vs-test scatter plot shows strong correlation, confirming the validation
 
 ### Per-Class Performance
 
-Best model (FFT + Euclidean, k=120, single):
-- Earthquake F1: 0.917
-- Explosion F1: 0.936
+Best model (FFT + Euclidean, k=120, ensemble):
+- Earthquake F1: 0.929
+- Explosion F1: 0.947
 
 The model is slightly better at detecting explosions, likely because their spectral signatures (sharp high-frequency peaks) are more distinctive than the diffuse energy patterns of earthquakes.
 
 ## Statistical Analysis of the Decision Function
 
-We observed that the SVM decision function values for each class closely resemble Gaussian distributions. To rigorously validate this and exploit it, we conducted a deep statistical analysis.
+We observed that the SVM decision function values for each class closely resemble Gaussian distributions. To rigorously validate this and exploit it, we conducted a deep statistical analysis on a single SVM model (FFT + Euclidean, k=120). The ensemble uses majority voting across 5 models and does not produce a single decision function, so the distributional analysis characterizes individual models within the ensemble.
 
 ### Gaussian Mixture Model Validation
 
