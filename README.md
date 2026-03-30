@@ -30,6 +30,7 @@ seismic-event-classifier/
 │   ├── plot_ablation.py                  # Plot generation from ablation results
 │   ├── plot_decision_boundary.py         # Decision boundary & spectral analysis plots
 │   ├── plot_gmm_analysis.py             # GMM statistical analysis of decision function
+│   ├── plot_threshold_calibration.py    # Threshold calibration under deployment imbalance
 │   ├── dataloader.py                     # HDF5 data loading
 │   ├── distances.py                      # 9 distance metric implementations
 │   ├── fastmap.py                        # FastMap algorithm
@@ -207,6 +208,24 @@ The empirically swept optimum yields a **+0.23pp improvement** with no retrainin
 
 The `BayesThresholdCalibrator` class in `classifier.py` implements this. It also accepts custom priors for deployment scenarios with different class ratios (e.g., real-world monitoring where explosions vastly outnumber earthquakes).
 
+### Calibration Under Deployment Imbalance
+
+In operational monitoring, explosions may outnumber earthquakes by 10:1 or more. We simulated this by computing prior-weighted accuracy under varying explosion priors:
+
+| Scenario | π_EX | Threshold τ* | Acc (t=0) | Gain |
+|----------|------|-------------|-----------|------|
+| Balanced | 50% | +0.012 | 92.50% | +0.27pp |
+| Test set | 57% | −0.063 | 92.54% | −0.30pp |
+| Moderate | 70% | −0.200 | 92.61% | +0.47pp |
+| High | 80% | −0.333 | 92.67% | +0.92pp |
+| Severe | 90% | −0.530 | 92.73% | **+3.27pp** |
+| Operational | 95% | −0.710 | 92.75% | **+4.82pp** |
+| Extreme | 99% | −1.101 | 92.78% | **+6.21pp** |
+
+At our test set balance, the SVM default is already near-optimal. But at realistic operational ratios (90-99% explosions), the calibration provides **3-6pp for free** — no retraining, just a threshold shift derived from the fitted Gaussians.
+
+![Threshold Calibration](figures/threshold_calibration.png)
+
 ### Overlap Analysis
 
 The overlap coefficient between the two class distributions is 0.0712 (7.12%), computed as the integral of the minimum of the two prior-weighted PDFs. This represents the theoretical lower bound on the Bayes error rate -- no classifier operating on the SVM decision function alone can achieve less than ~7% misclassification.
@@ -259,6 +278,15 @@ Saved to `output/decision_boundary_plots/` by running `python -m src.plot_gmm_an
 |------|-------------|
 | `decision_function_analysis.png` | 6-panel figure: (1) histogram with fitted Gaussian PDFs + GMM overlay + threshold markers, (2) Q-Q plots for normality assessment, (3) empirical vs fitted CDFs, (4) accuracy vs threshold sweep, (5) overlap region detail with error shading, (6) full statistics summary |
 
+### Threshold Calibration Analysis
+
+Saved to `output/decision_boundary_plots/` by running `python -m src.plot_threshold_calibration`:
+
+| Plot | Description |
+|------|-------------|
+| `threshold_calibration.png` | 2-panel figure: (1) accuracy with default vs calibrated threshold across explosion priors, (2) gain and threshold shift as a function of prior |
+| `threshold_calibration_results.json` | Full numerical results for all simulated scenarios |
+
 ## How to Run
 
 ### Setup
@@ -295,6 +323,12 @@ python -m src.plot_decision_boundary
 
 ```bash
 python -m src.plot_gmm_analysis
+```
+
+### Generate Threshold Calibration Analysis
+
+```bash
+python -m src.plot_threshold_calibration
 ```
 
 ### Model Loading
