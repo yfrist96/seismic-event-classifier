@@ -16,9 +16,9 @@ from sklearn.svm import SVC
 from scipy.stats import mode
 
 from src.dataloader import load_data
-from src.classifier import FastMapSVMClassifier
+from src.classifier import FastMapSVMClassifier, BayesThresholdCalibrator
 
-PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 DATA_DIR = os.path.join(PROJECT_ROOT, "data")
 MODEL_DIR = os.path.join(PROJECT_ROOT, "output", "ablation", "models")
 OUTPUT_DIR = os.path.join(PROJECT_ROOT, "output")
@@ -44,18 +44,29 @@ def load_test_metadata():
     return event_ids, stations, y
 
 
-def predict_single_model(X_test_fft):
-    """Load saved single model and predict with decision function scores."""
+def predict_single_model(X_test_fft, X_val_fft, y_val):
+    """Load saved single model, predict, and apply Bayes calibration."""
     model_path = os.path.join(MODEL_DIR, "ablation_FFT_euclidean_k120_single.joblib")
     model_dict = joblib.load(model_path)
 
-    X_emb = model_dict['fastmap'].transform(X_test_fft)
-    X_scaled = model_dict['scaler'].transform(X_emb)
+    # Test predictions
+    X_test_emb = model_dict['fastmap'].transform(X_test_fft)
+    X_test_scaled = model_dict['scaler'].transform(X_test_emb)
+    y_pred = model_dict['svm'].predict(X_test_scaled)
+    decision_vals = model_dict['svm'].decision_function(X_test_scaled)
 
-    y_pred = model_dict['svm'].predict(X_scaled)
-    decision_vals = model_dict['svm'].decision_function(X_scaled)
+    # Calibrate on validation set decision values
+    X_val_emb = model_dict['fastmap'].transform(X_val_fft)
+    X_val_scaled = model_dict['scaler'].transform(X_val_emb)
+    val_decision = model_dict['svm'].decision_function(X_val_scaled)
 
-    return y_pred, decision_vals
+    calibrator = BayesThresholdCalibrator()
+    calibrator.fit(val_decision, y_val)
+    y_calibrated = calibrator.predict(decision_vals)
+
+    print(f"  Bayes-optimal threshold: {calibrator.threshold:.4f}")
+
+    return y_pred, decision_vals, y_calibrated, calibrator.threshold
 
 
 def predict_ensemble(X_train_fft, y_train, X_val_fft, y_val, X_test_fft, best_params):
@@ -108,7 +119,9 @@ if __name__ == "__main__":
 
     # Single model predictions
     print("\nSingle model predictions...")
-    single_pred, single_decision = predict_single_model(X_test_fft)
+    single_pred, single_decision, calibrated_pred, threshold = predict_single_model(
+        X_test_fft, X_val_fft, y_val
+    )
 
     # Load best params from saved model for ensemble
     model_dict = joblib.load(os.path.join(MODEL_DIR, "ablation_FFT_euclidean_k120_single.joblib"))
@@ -130,6 +143,8 @@ if __name__ == "__main__":
         'single_pred_label': single_pred,
         'single_pred_class': [LABEL_MAP[y] for y in single_pred],
         'single_decision_score': np.round(single_decision, 4),
+        'calibrated_pred_label': calibrated_pred,
+        'calibrated_pred_class': [LABEL_MAP[y] for y in calibrated_pred],
         'ensemble_pred_label': ens_pred,
         'ensemble_pred_class': [LABEL_MAP[y] for y in ens_pred],
         'ensemble_vote_confidence': np.round(ens_vote_conf, 2),
@@ -141,7 +156,9 @@ if __name__ == "__main__":
 
     # Print summary
     single_acc = np.mean(single_pred == y_true)
+    cal_acc = np.mean(calibrated_pred == y_true)
     ens_acc = np.mean(ens_pred == y_true)
-    print(f"\nSingle model accuracy: {single_acc:.4f}")
-    print(f"Ensemble accuracy:     {ens_acc:.4f}")
+    print(f"\nSingle model accuracy:     {single_acc:.4f}")
+    print(f"Calibrated model accuracy: {cal_acc:.4f} (threshold={threshold:.4f})")
+    print(f"Ensemble accuracy:         {ens_acc:.4f}")
     print(f"\nSaved {len(df)} rows to: {output_path}")
