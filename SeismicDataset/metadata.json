@@ -1,0 +1,13 @@
+{
+  "sampling_rate": 200,
+  "window_length_seconds": 3.0,
+  "window_samples": 600,
+  "channels": ["Z", "N", "E"],
+  "label_map": {"0": "Earthquake", "1": "Explosion"},
+  "stations": ["BLGI","EIL","GEM","HNTI","HRFI","KZIT","MBRI","MSBI","NATI","OFRI","SLTI","ZFRI"],
+  "counts": {
+    "total_windows": 9105,
+    "earthquake": 4065,
+    "explosion": 5040
+  }
+}
