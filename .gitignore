@@ -32,5 +32,8 @@ Thumbs.db
 # Jupyter
 .ipynb_checkpoints/
 
+# CNN baseline (WIP)
+src/cnn_baseline.py
+
 # Paper (managed in Overleaf)
 paper/
