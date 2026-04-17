@@ -17,24 +17,43 @@ seismic-event-classifier/
 │   ├── dataset_train.h5                  # Training split (6,334 samples)
 │   ├── dataset_val.h5                    # Validation split (1,444 samples)
 │   └── dataset_test.h5                   # Test split (1,327 samples)
+├── SeismicDataset/
+│   ├── build_training_dataset.py         # Combine per-station HDF5 into unified dataset
+│   ├── split_by_event.py                 # Event-level stratified train/val/test split
+│   ├── select_good_stations.py           # Filter stations by minimum window counts
+│   ├── metadata.json                     # Event catalog metadata
+│   ├── station_metadata.csv              # Station coordinates and info
+│   └── summary_plots/                    # Dataset summary visualizations
 ├── output/
 │   ├── ablation/
 │   │   ├── models/                       # Saved models (.joblib)
 │   │   ├── embeddings/                   # FastMap embeddings (.npy)
 │   │   ├── results/                      # Per-experiment JSON + ablation_summary.json
 │   │   └── plots/                        # Ablation comparison plots
-│   └── decision_boundary_plots/          # Decision boundary & spectral analysis plots
+│   ├── decision_boundary_plots/          # Decision boundary & spectral analysis plots
+│   ├── test_predictions.csv              # Window-level test predictions (1,327 rows)
+│   ├── event_level_predictions.csv       # Event-level predictions (165 rows)
+│   ├── advisor_table.csv                 # Window-level results for advisor review
+│   └── advisor_event_level.csv           # Event-level results for advisor review
 ├── src/
 │   ├── ablation_config.py                # Ablation study configuration
 │   ├── ablation.py                       # Ablation study runner
 │   ├── plot_ablation.py                  # Plot generation from ablation results
 │   ├── plot_decision_boundary.py         # Decision boundary & spectral analysis plots
-│   ├── plot_gmm_analysis.py             # GMM statistical analysis of decision function
-│   ├── plot_threshold_calibration.py    # Threshold calibration under deployment imbalance
+│   ├── plot_gmm_analysis.py              # GMM statistical analysis of decision function
+│   ├── plot_threshold_calibration.py     # Threshold calibration under deployment imbalance
 │   ├── dataloader.py                     # HDF5 data loading
 │   ├── distances.py                      # 9 distance metric implementations
 │   ├── fastmap.py                        # FastMap algorithm
-│   └── classifier.py                     # FastMapSVM + BayesThresholdCalibrator + Baseline
+│   ├── classifier.py                     # FastMapSVM + BayesThresholdCalibrator + Baseline
+│   └── post_review/
+│       ├── export_test_predictions.py    # Export window-level test predictions to CSV
+│       ├── event_level_predictions.py    # Aggregate to event-level via majority vote
+│       ├── export_advisor_table.py       # Generate advisor review tables
+│       ├── plot_station_map.py           # Station map visualization
+│       └── extract_example_waveforms.py  # Extract example waveforms for figures
+├── paper/
+│   └── paper.tex                         # IEEE conference paper (managed in Overleaf)
 ├── README.md
 ├── requirements.txt
 └── .gitignore
@@ -154,6 +173,26 @@ Best model (FFT + Euclidean, k=120, ensemble):
 - Explosion F1: 0.947
 
 The model is slightly better at detecting explosions, likely because their spectral signatures (sharp high-frequency peaks) are more distinctive than the diffuse energy patterns of earthquakes.
+
+### Event-Level Predictions
+
+The window-level accuracy (93.90%) measures per-station performance, but operationally the goal is to classify each **event**. Since multiple stations record the same event, we aggregate window predictions to event-level using majority vote across all windows from the same event.
+
+| Prediction Type | Window Acc | Event Acc | Delta |
+|-----------------|-----------|-----------|-------|
+| Single          | 92.31%    | 95.76%    | +3.44pp |
+| Calibrated      | 91.94%    | 94.55%    | +2.61pp |
+| Ensemble        | 93.52%    | **96.97%** | +3.45pp |
+
+Event-level ensemble accuracy reaches **96.97%** — only 5 out of 165 test events misclassified. The improvement is expected: station-specific path effects and noise are independent across stations, so majority voting across windows smooths out individual station errors.
+
+Per-class event-level breakdown (ensemble):
+- Earthquake: 74/75 correct (98.67%)
+- Explosion: 86/90 correct (95.56%)
+
+```bash
+python -m src.post_review.event_level_predictions
+```
 
 ## Statistical Analysis of the Decision Function
 
@@ -329,6 +368,18 @@ python -m src.plot_gmm_analysis
 
 ```bash
 python -m src.plot_threshold_calibration
+```
+
+### Export Test Predictions
+
+```bash
+python -m src.post_review.export_test_predictions
+```
+
+### Event-Level Predictions
+
+```bash
+python -m src.post_review.event_level_predictions
 ```
 
 ### Model Loading

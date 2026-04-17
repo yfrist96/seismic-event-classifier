@@ -35,5 +35,8 @@ Thumbs.db
 # CNN baseline (WIP)
 src/cnn_baseline.py
 
+# Advisor figures
+advisor_figures/
+
 # Paper (managed in Overleaf)
 paper/
