@@ -291,7 +291,7 @@ All plots are saved to `output/ablation/plots/` by running `python -m src.plot_a
 | `heatmap_time_single.png` | Accuracy heatmap (time domain, single) |
 | `heatmap_time_ensemble.png` | Same for ensemble |
 | `val_vs_test.png` | Validation vs test accuracy (overfitting check) |
-| `overall_ranking.png` | Top 15 experiments ranked |
+| `overall_ranking.png` | Top 5 FFT experiments alongside the best time-domain model and the Random Forest baseline |
 | `domain_gap.png` | FFT advantage in percentage points at each k |
 
 ### Decision Boundary & Spectral Analysis
