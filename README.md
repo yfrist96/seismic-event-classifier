@@ -52,8 +52,8 @@ seismic-event-classifier/
 │       ├── export_advisor_table.py       # Generate advisor review tables
 │       ├── plot_station_map.py           # Station map visualization
 │       └── extract_example_waveforms.py  # Extract example waveforms for figures
-├── paper/
-│   └── paper.tex                         # IEEE conference paper (managed in Overleaf)
+├── figures/                              # Figures embedded in this README
+├── advisor_figures/                      # Figures contributed by domain advisor (GSI)
 ├── README.md
 ├── requirements.txt
 └── .gitignore
@@ -180,9 +180,9 @@ The window-level accuracy (93.90%) measures per-station performance, but operati
 
 | Prediction Type | Window Acc | Event Acc | Delta |
 |-----------------|-----------|-----------|-------|
-| Single          | 92.31%    | 95.76%    | +3.44pp |
+| Single          | 92.31%    | 95.76%    | +3.45pp |
 | Calibrated      | 91.94%    | 94.55%    | +2.61pp |
-| Ensemble        | 93.52%    | **96.97%** | +3.45pp |
+| Ensemble        | 93.90%    | **96.97%** | +3.07pp |
 
 Event-level ensemble accuracy reaches **96.97%** — only 5 out of 165 test events misclassified. The improvement is expected: station-specific path effects and noise are independent across stations, so majority voting across windows smooths out individual station errors.
 
@@ -240,7 +240,7 @@ $$P(EQ) \cdot \mathcal{N}(x; \mu_{EQ}, \sigma_{EQ}) = P(EX) \cdot \mathcal{N}(x;
 | Threshold | Accuracy |
 |-----------|----------|
 | SVM default (t=0.000) | 92.54% |
-| Bayes-optimal (t=-0.063) | 92.16% |
+| Bayes-optimal (t=-0.063) | 92.24% |
 | Empirical best (t=+0.011) | 92.77% |
 
 The empirically swept optimum yields a **+0.23pp improvement** with no retraining -- purely a post-hoc adjustment. The close agreement between the Bayes-optimal threshold and the SVM default confirms that the SVM is already operating near the Bayes-optimal decision boundary.
