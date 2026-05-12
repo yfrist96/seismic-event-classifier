@@ -19,7 +19,7 @@ DATA_DIR = os.path.join(PROJECT_ROOT, "data")
 OUTPUT_DIR = os.path.join(PROJECT_ROOT, "output", "example_waveforms_for_ittai")
 
 CHANNEL_NAMES = ['Vertical (Z)', 'North-South (N)', 'East-West (E)']
-SAMPLE_RATE = 100
+SAMPLE_RATE = 200
 N_SAMPLES = 600
 
 
