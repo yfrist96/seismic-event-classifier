@@ -1,8 +1,14 @@
 """
 Deep statistical analysis of SVM decision function distribution.
 
-Fits Gaussian mixture models, runs normality tests, computes d-prime,
-finds the Bayes-optimal threshold, and quantifies distributional overlap.
+Out-of-sample calibration: the class-conditional Gaussians, the 2-component GMM,
+the normality tests, d-prime, and the Bayes-optimal threshold are all estimated
+on the VALIDATION set, which is held out from model training (the model is trained
+on the TRAINING split only). Classification accuracy at the default (tau=0) and
+Bayes-optimal thresholds is then reported on the disjoint TEST set. This keeps the
+threshold calibration and its evaluation on separate data, so the Gaussian
+structure and the recalibration benefit are a genuine out-of-sample result rather
+than an in-sample artifact.
 
 Usage: python -m src.plot_gmm_analysis
 """
@@ -41,39 +47,51 @@ def to_frequency_domain(X):
     return normalize(X_flat, axis=1, norm='l2')
 
 
-def plot_decision_function_analysis(decision_vals, y, save_dir):
-    """Deep statistical analysis of SVM decision function distribution.
+def plot_decision_function_analysis(val_vals, y_val, test_vals, y_test, save_dir):
+    """Out-of-sample statistical analysis of the SVM decision function.
 
-    Fits Gaussian models per class, a 2-component GMM on unlabeled data,
-    runs normality tests, computes d-prime, finds the Bayes-optimal threshold,
-    and quantifies the overlap between class distributions.
+    The Gaussian model (per-class fits, GMM, normality tests, d', Bayes-optimal
+    threshold) is estimated on the VALIDATION decision values, which are held out
+    from model training. Classification accuracy is then reported on the disjoint
+    TEST set, applying the validation-derived threshold. This isolates the
+    calibration claim from the data used to evaluate it.
 
     Args:
-        decision_vals: SVM decision function values, shape (n_samples,).
-        y: true labels (0=Earthquake, 1=Explosion), shape (n_samples,).
-        save_dir: directory to save the output figure.
+        val_vals:  SVM decision-function values on the validation set (calibration).
+        y_val:     validation labels (0=Earthquake, 1=Explosion).
+        test_vals: SVM decision-function values on the test set (evaluation).
+        y_test:    test labels.
+        save_dir:  directory to save the output figures.
     """
-    print("  === Decision Function Statistical Analysis ===\n")
+    print("  === Decision Function Statistical Analysis (out-of-sample) ===\n")
 
-    eq_vals = decision_vals[y == 0]
-    ex_vals = decision_vals[y == 1]
+    # ── Calibration set (validation): fit the Gaussian model ──
+    eq_vals = val_vals[y_val == 0]
+    ex_vals = val_vals[y_val == 1]
 
-    # ── Per-class Gaussian fits ──
     mu_eq, sigma_eq = norm.fit(eq_vals)
     mu_ex, sigma_ex = norm.fit(ex_vals)
     n_eq, n_ex = len(eq_vals), len(ex_vals)
     n_total = n_eq + n_ex
 
-    print(f"  Per-class Gaussian fits:")
+    print(f"  Per-class Gaussian fits (VALIDATION / calibration set):")
     print(f"    Earthquake:  mu = {mu_eq:+.4f},  sigma = {sigma_eq:.4f},  n = {n_eq}")
     print(f"    Explosion:   mu = {mu_ex:+.4f},  sigma = {sigma_ex:.4f},  n = {n_ex}")
 
-    # ── d-prime (sensitivity index) ──
-    d_prime = abs(mu_ex - mu_eq) / np.sqrt(0.5 * (sigma_eq**2 + sigma_ex**2))
-    print(f"\n  Separation metrics:")
-    print(f"    d-prime (sensitivity index): {d_prime:.4f}")
+    # ── Test set: used only for evaluation and the generalization figure ──
+    test_eq_vals = test_vals[y_test == 0]
+    test_ex_vals = test_vals[y_test == 1]
+    mu_eq_t, sigma_eq_t = norm.fit(test_eq_vals)
+    mu_ex_t, sigma_ex_t = norm.fit(test_ex_vals)
 
-    # ── Normality tests ──
+    # ── d-prime (sensitivity index) on both splits ──
+    d_prime = abs(mu_ex - mu_eq) / np.sqrt(0.5 * (sigma_eq**2 + sigma_ex**2))
+    d_prime_test = abs(mu_ex_t - mu_eq_t) / np.sqrt(0.5 * (sigma_eq_t**2 + sigma_ex_t**2))
+    print(f"\n  Separation metrics:")
+    print(f"    d-prime (validation, calibration): {d_prime:.4f}")
+    print(f"    d-prime (test, out-of-sample):     {d_prime_test:.4f}")
+
+    # ── Normality tests (validation set) ──
     # Shapiro-Wilk has a sample limit of 5000
     def safe_shapiro(vals, name):
         if len(vals) > 5000:
@@ -90,14 +108,14 @@ def plot_decision_function_analysis(decision_vals, y, save_dir):
     ks_eq, ksp_eq = kstest(eq_vals, 'norm', args=(mu_eq, sigma_eq))
     ks_ex, ksp_ex = kstest(ex_vals, 'norm', args=(mu_ex, sigma_ex))
 
-    print(f"\n  Normality tests:")
+    print(f"\n  Normality tests (validation set):")
     sub_note_eq = " (subsampled to 5000)" if sub_eq else ""
     sub_note_ex = " (subsampled to 5000)" if sub_ex else ""
     print(f"    Earthquake:  Shapiro W={w_eq:.4f} (p={p_eq:.4e}){sub_note_eq}  |  KS D={ks_eq:.4f} (p={ksp_eq:.4e})")
     print(f"    Explosion:   Shapiro W={w_ex:.4f} (p={p_ex:.4e}){sub_note_ex}  |  KS D={ks_ex:.4f} (p={ksp_ex:.4e})")
 
-    # ── GMM model comparison (unsupervised) ──
-    X_gmm = decision_vals.reshape(-1, 1)
+    # ── GMM model comparison (unsupervised, validation set) ──
+    X_gmm = val_vals.reshape(-1, 1)
     gmm1 = GaussianMixture(n_components=1, random_state=42, n_init=5).fit(X_gmm)
     gmm2 = GaussianMixture(n_components=2, random_state=42, n_init=5).fit(X_gmm)
 
@@ -110,7 +128,7 @@ def plot_decision_function_analysis(decision_vals, y, save_dir):
     gmm_stds = np.sqrt(gmm2.covariances_.ravel()[order])
     gmm_weights = gmm2.weights_[order]
 
-    print(f"\n  GMM model comparison (unsupervised on all decision values):")
+    print(f"\n  GMM model comparison (unsupervised on validation decision values):")
     print(f"    1-component:  AIC = {aic1:.1f},  BIC = {bic1:.1f}")
     print(f"    2-component:  AIC = {aic2:.1f},  BIC = {bic2:.1f}")
     preferred = "2-component" if bic2 < bic1 else "1-component"
@@ -120,7 +138,7 @@ def plot_decision_function_analysis(decision_vals, y, save_dir):
     print(f"    Component 1: mu={gmm_means[0]:+.4f}, sigma={gmm_stds[0]:.4f}, weight={gmm_weights[0]:.4f}")
     print(f"    Component 2: mu={gmm_means[1]:+.4f}, sigma={gmm_stds[1]:.4f}, weight={gmm_weights[1]:.4f}")
 
-    # ── Bayes-optimal threshold ──
+    # ── Bayes-optimal threshold (estimated on validation priors + fits) ──
     prior_eq = n_eq / n_total
     prior_ex = n_ex / n_total
 
@@ -132,31 +150,38 @@ def plot_decision_function_analysis(decision_vals, y, save_dir):
         optimal_threshold = brentq(posterior_diff, mu_eq, mu_ex)
     except ValueError:
         # Fallback: grid search
-        x_grid = np.linspace(decision_vals.min(), decision_vals.max(), 10000)
+        x_grid = np.linspace(val_vals.min(), val_vals.max(), 10000)
         diffs = np.abs([posterior_diff(x) for x in x_grid])
         optimal_threshold = x_grid[np.argmin(diffs)]
 
-    # ── Threshold sweep for empirical best ──
-    thresholds = np.linspace(decision_vals.min(), decision_vals.max(), 2000)
+    # ── Accuracy: default vs validation-derived Bayes threshold ──
+    # Calibration threshold comes from validation; the headline numbers are on TEST.
+    acc_svm_val = accuracy_score(y_val, (val_vals > 0).astype(int))
+    acc_bayes_val = accuracy_score(y_val, (val_vals > optimal_threshold).astype(int))
+    acc_svm_test = accuracy_score(y_test, (test_vals > 0).astype(int))
+    acc_bayes_test = accuracy_score(y_test, (test_vals > optimal_threshold).astype(int))
+
+    # Test-set threshold sweep, for the figure only. The oracle "empirical best"
+    # on test is reported purely as an upper bound; it is NOT used to pick tau.
+    thresholds = np.linspace(test_vals.min(), test_vals.max(), 2000)
     accuracies = np.array([
-        accuracy_score(y, (decision_vals > t).astype(int)) for t in thresholds
+        accuracy_score(y_test, (test_vals > t).astype(int)) for t in thresholds
     ])
     best_idx = np.argmax(accuracies)
     empirical_best_threshold = thresholds[best_idx]
     empirical_best_acc = accuracies[best_idx]
 
-    acc_svm = accuracy_score(y, (decision_vals > 0).astype(int))
-    acc_bayes = accuracy_score(y, (decision_vals > optimal_threshold).astype(int))
+    print(f"\n  Threshold analysis (calibrated on validation, evaluated on test):")
+    print(f"    Validation  SVM (t=0.000):          accuracy = {acc_svm_val:.2%}")
+    print(f"    Validation  Bayes (t={optimal_threshold:+.3f}):     accuracy = {acc_bayes_val:.2%}")
+    print(f"    TEST        SVM (t=0.000):          accuracy = {acc_svm_test:.2%}")
+    print(f"    TEST        Bayes (t={optimal_threshold:+.3f}):     accuracy = {acc_bayes_test:.2%}")
+    print(f"    TEST        empirical best (t={empirical_best_threshold:+.3f}) [oracle]: accuracy = {empirical_best_acc:.2%}")
+    improvement = (acc_bayes_test - acc_svm_test) * 100
+    print(f"    Out-of-sample gain from Bayes recalibration: {improvement:+.2f}pp")
 
-    print(f"\n  Threshold analysis:")
-    print(f"    SVM boundary (t=0.000):             accuracy = {acc_svm:.2%}")
-    print(f"    Bayes-optimal (t={optimal_threshold:+.3f}):       accuracy = {acc_bayes:.2%}")
-    print(f"    Empirical best (t={empirical_best_threshold:+.3f}):      accuracy = {empirical_best_acc:.2%}")
-    improvement = (empirical_best_acc - acc_svm) * 100
-    print(f"    Improvement from optimal shift: {improvement:+.2f}pp")
-
-    # ── Overlap coefficient ──
-    x_grid = np.linspace(decision_vals.min() - 1, decision_vals.max() + 1, 5000)
+    # ── Overlap coefficient (validation fits) ──
+    x_grid = np.linspace(val_vals.min() - 1, val_vals.max() + 1, 5000)
     pdf_eq = prior_eq * norm.pdf(x_grid, mu_eq, sigma_eq)
     pdf_ex = prior_ex * norm.pdf(x_grid, mu_ex, sigma_ex)
     overlap = np.trapz(np.minimum(pdf_eq, pdf_ex), x_grid)
@@ -164,29 +189,30 @@ def plot_decision_function_analysis(decision_vals, y, save_dir):
     misclass_eq = np.mean(eq_vals > 0)
     misclass_ex = np.mean(ex_vals < 0)
 
-    print(f"\n  Overlap analysis:")
+    print(f"\n  Overlap analysis (validation set):")
     print(f"    Overlap coefficient: {overlap:.4f} ({overlap:.2%} of total density)")
     print(f"    EQ beyond SVM boundary: {misclass_eq:.1%}")
     print(f"    EX beyond SVM boundary: {misclass_ex:.1%}")
 
     # ═══════════════════════════════════════════════════════════
-    # Figure: 3x2 grid
+    # Figure: 3x2 grid. Distributional diagnostics (panels showing the fit) use
+    # the VALIDATION set; the accuracy panel uses the TEST set to show the
+    # validation-derived threshold generalizes out of sample.
     # ═══════════════════════════════════════════════════════════
     print(f"\n  Generating analysis figure...")
 
     fig, axes = plt.subplots(3, 2, figsize=(16, 18))
-    fig.suptitle('Statistical Analysis of SVM Decision Function',
+    fig.suptitle('Statistical Analysis of SVM Decision Function (validation-calibrated, test-evaluated)',
                  fontsize=16, fontweight='bold', y=0.98)
 
-    # ── Panel (0,0): Histogram + fitted PDFs ──
+    x_plot = np.linspace(val_vals.min() - 0.5, val_vals.max() + 0.5, 500)
+    bins = np.linspace(val_vals.min(), val_vals.max(), 60)
+
+    # ── Panel (0,0): Validation histogram + fitted PDFs ──
     ax = axes[0, 0]
-    x_plot = np.linspace(decision_vals.min() - 0.5, decision_vals.max() + 0.5, 500)
-    bins = np.linspace(decision_vals.min(), decision_vals.max(), 60)
+    ax.hist(eq_vals, bins=bins, alpha=0.4, color='#3498db', label='Earthquake (val data)', density=True)
+    ax.hist(ex_vals, bins=bins, alpha=0.4, color='#e74c3c', label='Explosion (val data)', density=True)
 
-    ax.hist(eq_vals, bins=bins, alpha=0.4, color='#3498db', label='Earthquake (data)', density=True)
-    ax.hist(ex_vals, bins=bins, alpha=0.4, color='#e74c3c', label='Explosion (data)', density=True)
-
-    # Per-class fitted Gaussians
     ax.plot(x_plot, norm.pdf(x_plot, mu_eq, sigma_eq) * prior_eq,
             color='#2980b9', linewidth=2.5, linestyle='-',
             label=f'EQ fit: N({mu_eq:.2f}, {sigma_eq:.2f})')
@@ -194,7 +220,6 @@ def plot_decision_function_analysis(decision_vals, y, save_dir):
             color='#c0392b', linewidth=2.5, linestyle='-',
             label=f'EX fit: N({mu_ex:.2f}, {sigma_ex:.2f})')
 
-    # GMM fit (unsupervised)
     gmm_pdf = np.zeros_like(x_plot)
     for k in range(2):
         gmm_pdf += gmm_weights[k] * norm.pdf(x_plot, gmm_means[k], gmm_stds[k])
@@ -207,23 +232,20 @@ def plot_decision_function_analysis(decision_vals, y, save_dir):
 
     ax.set_xlabel('Decision Function Value')
     ax.set_ylabel('Density')
-    ax.set_title('Histogram with Fitted Gaussian PDFs', fontweight='bold')
+    ax.set_title('Validation Histogram with Fitted Gaussian PDFs', fontweight='bold')
     ax.legend(fontsize=7, loc='upper left')
     ax.grid(alpha=0.2)
 
-    # ── Panel (0,1): Q-Q plots ──
+    # ── Panel (0,1): Q-Q plots (validation) ──
     ax = axes[0, 1]
     for vals, name, color in [(eq_vals, 'Earthquake', '#3498db'), (ex_vals, 'Explosion', '#e74c3c')]:
         osm, osr = probplot(vals, dist="norm", fit=False)
-        # osm = theoretical quantiles, osr = ordered sample values
         ax.scatter(osm, osr, color=color, s=8, alpha=0.5, label=name, edgecolors='none')
 
-    # Reference line
     all_quantiles = np.concatenate([probplot(eq_vals, dist="norm", fit=False)[0],
                                      probplot(ex_vals, dist="norm", fit=False)[0]])
     q_min, q_max = all_quantiles.min(), all_quantiles.max()
 
-    # Fit line for each class
     for vals, color in [(eq_vals, '#2980b9'), (ex_vals, '#c0392b')]:
         osm, osr = probplot(vals, dist="norm", fit=False)
         slope, intercept = np.polyfit(osm, osr, 1)
@@ -232,11 +254,11 @@ def plot_decision_function_analysis(decision_vals, y, save_dir):
 
     ax.set_xlabel('Theoretical Quantiles')
     ax.set_ylabel('Sample Quantiles')
-    ax.set_title('Q-Q Plots (Normal Distribution)', fontweight='bold')
+    ax.set_title('Q-Q Plots (Normal Distribution, validation)', fontweight='bold')
     ax.legend(fontsize=9)
     ax.grid(alpha=0.3)
 
-    # ── Panel (1,0): Empirical vs fitted CDFs ──
+    # ── Panel (1,0): Empirical vs fitted CDFs (validation) ──
     ax = axes[1, 0]
     for vals, mu, sigma, name, color in [
         (eq_vals, mu_eq, sigma_eq, 'Earthquake', '#3498db'),
@@ -253,39 +275,38 @@ def plot_decision_function_analysis(decision_vals, y, save_dir):
     ax.axvline(x=0, color='black', linewidth=1.5, linestyle='--', alpha=0.5)
     ax.axvline(x=optimal_threshold, color='purple', linewidth=1.5, linestyle=':', alpha=0.7)
 
-    # Shade overlap region
     overlap_left = max(eq_vals.min(), ex_vals.min())
     overlap_right = min(eq_vals.max(), ex_vals.max())
     ax.axvspan(overlap_left, overlap_right, alpha=0.08, color='gray', label='Overlap region')
 
     ax.set_xlabel('Decision Function Value')
     ax.set_ylabel('Cumulative Probability')
-    ax.set_title('Empirical vs Fitted CDFs', fontweight='bold')
+    ax.set_title('Empirical vs Fitted CDFs (validation)', fontweight='bold')
     ax.legend(fontsize=7, loc='lower right')
     ax.grid(alpha=0.3)
 
-    # ── Panel (1,1): Accuracy vs threshold sweep ──
+    # ── Panel (1,1): Accuracy vs threshold sweep (TEST set) ──
     ax = axes[1, 1]
     ax.plot(thresholds, accuracies, color='#2c3e50', linewidth=1.5)
 
     ax.axvline(x=0, color='black', linewidth=1.5, linestyle='--',
-               label=f'SVM (t=0, acc={acc_svm:.2%})')
+               label=f'SVM (t=0, test acc={acc_svm_test:.2%})')
     ax.axvline(x=optimal_threshold, color='purple', linewidth=1.5, linestyle=':',
-               label=f'Bayes (t={optimal_threshold:.3f}, acc={acc_bayes:.2%})')
+               label=f'Bayes val-derived (t={optimal_threshold:.3f}, test acc={acc_bayes_test:.2%})')
     ax.axvline(x=empirical_best_threshold, color='green', linewidth=1.5, linestyle='-.',
-               label=f'Best (t={empirical_best_threshold:.3f}, acc={empirical_best_acc:.2%})')
+               label=f'Test-oracle best (t={empirical_best_threshold:.3f}, acc={empirical_best_acc:.2%})')
 
-    ax.scatter([0], [acc_svm], color='black', s=60, zorder=5)
-    ax.scatter([optimal_threshold], [acc_bayes], color='purple', s=60, zorder=5)
+    ax.scatter([0], [acc_svm_test], color='black', s=60, zorder=5)
+    ax.scatter([optimal_threshold], [acc_bayes_test], color='purple', s=60, zorder=5)
     ax.scatter([empirical_best_threshold], [empirical_best_acc], color='green', s=60, zorder=5)
 
     ax.set_xlabel('Decision Threshold')
-    ax.set_ylabel('Accuracy')
-    ax.set_title('Accuracy vs Decision Threshold', fontweight='bold')
+    ax.set_ylabel('Test Accuracy')
+    ax.set_title('Test Accuracy vs Decision Threshold', fontweight='bold')
     ax.legend(fontsize=8)
     ax.grid(alpha=0.3)
 
-    # ── Panel (2,0): Overlap detail (zoomed) ──
+    # ── Panel (2,0): Overlap detail (validation fits, zoomed) ──
     ax = axes[2, 0]
     zoom_left = optimal_threshold - 2 * max(sigma_eq, sigma_ex)
     zoom_right = optimal_threshold + 2 * max(sigma_eq, sigma_ex)
@@ -297,12 +318,9 @@ def plot_decision_function_analysis(decision_vals, y, save_dir):
     ax.plot(x_zoom, pdf_eq_zoom, color='#3498db', linewidth=2, label='Earthquake PDF')
     ax.plot(x_zoom, pdf_ex_zoom, color='#e74c3c', linewidth=2, label='Explosion PDF')
 
-    # Shade classification error regions
-    # EQ error: area under EQ pdf to the right of threshold
     mask_eq_error = x_zoom > optimal_threshold
     ax.fill_between(x_zoom[mask_eq_error], 0, pdf_eq_zoom[mask_eq_error],
                      color='#3498db', alpha=0.3, label='EQ misclassified')
-    # EX error: area under EX pdf to the left of threshold
     mask_ex_error = x_zoom < optimal_threshold
     ax.fill_between(x_zoom[mask_ex_error], 0, pdf_ex_zoom[mask_ex_error],
                      color='#e74c3c', alpha=0.3, label='EX misclassified')
@@ -326,41 +344,38 @@ def plot_decision_function_analysis(decision_vals, y, save_dir):
     shapiro_note_ex = "*" if sub_ex else ""
 
     stats_text = (
-        "GAUSSIAN FIT PARAMETERS\n"
+        "GAUSSIAN FIT PARAMETERS (VALIDATION / calibration)\n"
         "─────────────────────────────────────\n"
         f"  Earthquake:  mu = {mu_eq:+.4f},  sigma = {sigma_eq:.4f}  (n={n_eq})\n"
         f"  Explosion:   mu = {mu_ex:+.4f},  sigma = {sigma_ex:.4f}  (n={n_ex})\n"
         "\n"
-        "SEPARATION METRIC\n"
+        "SEPARATION METRIC (d')\n"
         "─────────────────────────────────────\n"
-        f"  d' (sensitivity index) = {d_prime:.4f}\n"
+        f"  Validation (calibration): d' = {d_prime:.4f}\n"
+        f"  Test (out-of-sample):     d' = {d_prime_test:.4f}\n"
         "\n"
-        "NORMALITY TESTS\n"
+        "NORMALITY TESTS (validation)\n"
         "─────────────────────────────────────\n"
         f"  Earthquake:  Shapiro W={w_eq:.4f} (p={p_eq:.2e}){shapiro_note_eq}\n"
         f"               KS D={ks_eq:.4f} (p={ksp_eq:.2e})\n"
         f"  Explosion:   Shapiro W={w_ex:.4f} (p={p_ex:.2e}){shapiro_note_ex}\n"
         f"               KS D={ks_ex:.4f} (p={ksp_ex:.2e})\n"
         "\n"
-        "GMM MODEL COMPARISON\n"
+        "GMM MODEL COMPARISON (validation)\n"
         "─────────────────────────────────────\n"
         f"  1-component:  AIC={aic1:.1f}  BIC={bic1:.1f}\n"
         f"  2-component:  AIC={aic2:.1f}  BIC={bic2:.1f}\n"
         f"  Preferred: {preferred} (delta_BIC={abs(bic1-bic2):.1f})\n"
         "\n"
-        "GMM 2-COMPONENT (UNSUPERVISED)\n"
+        "THRESHOLD ANALYSIS (calibrated on val, evaluated on test)\n"
         "─────────────────────────────────────\n"
-        f"  Comp 1: mu={gmm_means[0]:+.4f}, sigma={gmm_stds[0]:.4f}, w={gmm_weights[0]:.3f}\n"
-        f"  Comp 2: mu={gmm_means[1]:+.4f}, sigma={gmm_stds[1]:.4f}, w={gmm_weights[1]:.3f}\n"
+        f"  Bayes-optimal threshold (from val): t = {optimal_threshold:+.3f}\n"
+        f"  TEST  SVM boundary (t= 0.000):  acc = {acc_svm_test:.2%}\n"
+        f"  TEST  Bayes (t={optimal_threshold:+.3f}):      acc = {acc_bayes_test:.2%}\n"
+        f"  TEST  oracle best (t={empirical_best_threshold:+.3f}): acc = {empirical_best_acc:.2%}\n"
+        f"  Out-of-sample Bayes gain: {improvement:+.2f}pp\n"
         "\n"
-        "THRESHOLD ANALYSIS\n"
-        "─────────────────────────────────────\n"
-        f"  SVM boundary (t= 0.000):    acc = {acc_svm:.2%}\n"
-        f"  Bayes-optimal (t={optimal_threshold:+.3f}):  acc = {acc_bayes:.2%}\n"
-        f"  Empirical best (t={empirical_best_threshold:+.3f}): acc = {empirical_best_acc:.2%}\n"
-        f"  Improvement: {improvement:+.2f}pp\n"
-        "\n"
-        "OVERLAP ANALYSIS\n"
+        "OVERLAP ANALYSIS (validation)\n"
         "─────────────────────────────────────\n"
         f"  Overlap coefficient: {overlap:.4f} ({overlap:.2%})\n"
         f"  EQ beyond SVM boundary: {misclass_eq:.1%}\n"
@@ -379,6 +394,53 @@ def plot_decision_function_analysis(decision_vals, y, save_dir):
     plt.close()
     print(f"\n  Saved: {save_path}.png/pdf")
 
+    # ═══════════════════════════════════════════════════════════
+    # Standalone panel (a) — the main-text figure. Shows the held-out TEST
+    # decision-value histogram overlaid with the VALIDATION-derived Gaussian
+    # fits and the VALIDATION-derived Bayes-optimal threshold. The curves are
+    # calibrated on data disjoint from the histogram, so a good match is a
+    # genuine out-of-sample result.
+    # ═══════════════════════════════════════════════════════════
+    fig_a, ax = plt.subplots(1, 1, figsize=(7, 4.6))
+
+    x_plot_t = np.linspace(test_vals.min() - 0.5, test_vals.max() + 0.5, 500)
+    bins_t = np.linspace(test_vals.min(), test_vals.max(), 60)
+
+    ax.hist(test_eq_vals, bins=bins_t, alpha=0.4, color='#3498db',
+            label='Earthquake (test data)', density=True)
+    ax.hist(test_ex_vals, bins=bins_t, alpha=0.4, color='#e74c3c',
+            label='Explosion (test data)', density=True)
+
+    # Validation-derived Gaussian fits (calibrated on held-out data)
+    ax.plot(x_plot_t, norm.pdf(x_plot_t, mu_eq, sigma_eq) * prior_eq,
+            color='#2980b9', linewidth=2.5, linestyle='-',
+            label=f'EQ fit (val): N({mu_eq:.2f}, {sigma_eq:.2f})')
+    ax.plot(x_plot_t, norm.pdf(x_plot_t, mu_ex, sigma_ex) * prior_ex,
+            color='#c0392b', linewidth=2.5, linestyle='-',
+            label=f'EX fit (val): N({mu_ex:.2f}, {sigma_ex:.2f})')
+
+    gmm_pdf_t = np.zeros_like(x_plot_t)
+    for k in range(2):
+        gmm_pdf_t += gmm_weights[k] * norm.pdf(x_plot_t, gmm_means[k], gmm_stds[k])
+    ax.plot(x_plot_t, gmm_pdf_t, color='green', linewidth=2, linestyle='--',
+            label='GMM (val, unsupervised)', alpha=0.8)
+
+    ax.axvline(x=0, color='black', linewidth=1.5, linestyle='--', alpha=0.7,
+               label='SVM boundary ($\\tau$=0)')
+    ax.axvline(x=optimal_threshold, color='purple', linewidth=1.5, linestyle=':',
+               label=f'Bayes-optimal ($\\tau$={optimal_threshold:.3f}, val-derived)')
+
+    ax.set_xlabel('Decision Function Value (test set)')
+    ax.set_ylabel('Density')
+    ax.legend(fontsize=8, loc='upper left')
+    ax.grid(alpha=0.2)
+
+    fig_a.tight_layout()
+    save_path_a = os.path.join(save_dir, "decision_gaussian_histogram")
+    save_figure(fig_a, save_path_a)
+    plt.close()
+    print(f"  Saved standalone panel (a): {save_path_a}.png/pdf")
+
 
 if __name__ == "__main__":
     os.makedirs(PLOT_DIR, exist_ok=True)
@@ -387,33 +449,36 @@ if __name__ == "__main__":
     print("Loading data...")
     (X_train_raw, y_train), (X_val_raw, y_val), (X_test_raw, y_test) = load_data(DATA_DIR)
 
-    # Combine train+val
-    X_trainval_raw = np.vstack([X_train_raw, X_val_raw])
-    y_trainval = np.concatenate([y_train, y_val])
-
-    # FFT features
+    # FFT features. The model is trained on the TRAIN split ONLY so that the
+    # validation set is a genuine held-out calibration set (no leakage into the
+    # Gaussian/threshold fit). Validation calibrates the threshold; test evaluates it.
     print("Computing FFT features...")
-    X_trainval_fft = to_frequency_domain(X_trainval_raw)
+    X_train_fft = to_frequency_domain(X_train_raw)
+    X_val_fft = to_frequency_domain(X_val_raw)
     X_test_fft = to_frequency_domain(X_test_raw)
 
-    # Train k=120 FastMap model
-    print("Training k=120 FastMap model...")
+    # Train k=120 FastMap model on TRAIN only
+    print("Training k=120 FastMap model (train split only)...")
     np.random.seed(42)
     model = FastMapSVMClassifier(k=120, dist_func='euclidean')
-    X_trainval_emb = model.fastmap.fit_transform(X_trainval_fft)
+    X_train_emb = model.fastmap.fit_transform(X_train_fft)
+    X_val_emb = model.fastmap.transform(X_val_fft)
     X_test_emb = model.fastmap.transform(X_test_fft)
 
     scaler = StandardScaler()
-    X_trainval_scaled = scaler.fit_transform(X_trainval_emb)
+    X_train_scaled = scaler.fit_transform(X_train_emb)
+    X_val_scaled = scaler.transform(X_val_emb)
     X_test_scaled = scaler.transform(X_test_emb)
 
     clf = SVC(C=1000, gamma=0.01, kernel='rbf', class_weight='balanced')
-    clf.fit(X_trainval_scaled, y_trainval)
+    clf.fit(X_train_scaled, y_train)
 
-    y_pred_test = clf.predict(X_test_scaled)
+    decision_vals_val = clf.decision_function(X_val_scaled)
     decision_vals_test = clf.decision_function(X_test_scaled)
-    test_acc = accuracy_score(y_test, y_pred_test)
-    print(f"Full model test accuracy: {test_acc:.4f}\n")
+    val_acc = accuracy_score(y_val, clf.predict(X_val_scaled))
+    test_acc = accuracy_score(y_test, clf.predict(X_test_scaled))
+    print(f"Train-only model: validation accuracy = {val_acc:.4f}, test accuracy = {test_acc:.4f}\n")
 
-    # Run the analysis
-    plot_decision_function_analysis(decision_vals_test, y_test, PLOT_DIR)
+    # Run the analysis: calibrate on validation, evaluate on test
+    plot_decision_function_analysis(decision_vals_val, y_val,
+                                    decision_vals_test, y_test, PLOT_DIR)
