@@ -379,6 +379,44 @@ def plot_decision_function_analysis(decision_vals, y, save_dir):
     plt.close()
     print(f"\n  Saved: {save_path}.png/pdf")
 
+    # ═══════════════════════════════════════════════════════════
+    # Standalone panel (a): histogram + fitted Gaussian PDFs + GMM
+    # overlay + SVM/Bayes thresholds. Exported for the TGRS main text
+    # (extracted from the 6-panel analysis figure per the adaptation plan).
+    # ═══════════════════════════════════════════════════════════
+    fig_a, ax = plt.subplots(1, 1, figsize=(7, 4.6))
+
+    ax.hist(eq_vals, bins=bins, alpha=0.4, color='#3498db', label='Earthquake (data)', density=True)
+    ax.hist(ex_vals, bins=bins, alpha=0.4, color='#e74c3c', label='Explosion (data)', density=True)
+
+    ax.plot(x_plot, norm.pdf(x_plot, mu_eq, sigma_eq) * prior_eq,
+            color='#2980b9', linewidth=2.5, linestyle='-',
+            label=f'EQ fit: N({mu_eq:.2f}, {sigma_eq:.2f})')
+    ax.plot(x_plot, norm.pdf(x_plot, mu_ex, sigma_ex) * prior_ex,
+            color='#c0392b', linewidth=2.5, linestyle='-',
+            label=f'EX fit: N({mu_ex:.2f}, {sigma_ex:.2f})')
+
+    gmm_pdf = np.zeros_like(x_plot)
+    for k in range(2):
+        gmm_pdf += gmm_weights[k] * norm.pdf(x_plot, gmm_means[k], gmm_stds[k])
+    ax.plot(x_plot, gmm_pdf, color='green', linewidth=2, linestyle='--',
+            label='GMM (unsupervised)', alpha=0.8)
+
+    ax.axvline(x=0, color='black', linewidth=1.5, linestyle='--', alpha=0.7, label='SVM boundary ($\\tau$=0)')
+    ax.axvline(x=optimal_threshold, color='purple', linewidth=1.5, linestyle=':',
+               label=f'Bayes-optimal ($\\tau$={optimal_threshold:.3f})')
+
+    ax.set_xlabel('Decision Function Value')
+    ax.set_ylabel('Density')
+    ax.legend(fontsize=8, loc='upper left')
+    ax.grid(alpha=0.2)
+
+    fig_a.tight_layout()
+    save_path_a = os.path.join(save_dir, "decision_gaussian_histogram")
+    save_figure(fig_a, save_path_a)
+    plt.close()
+    print(f"  Saved standalone panel (a): {save_path_a}.png/pdf")
+
 
 if __name__ == "__main__":
     os.makedirs(PLOT_DIR, exist_ok=True)

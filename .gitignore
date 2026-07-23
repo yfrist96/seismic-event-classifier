@@ -18,6 +18,7 @@ build/
 .venv/
 venv/
 env/
+video_venv/
 
 # IDE
 .vscode/
@@ -32,11 +33,13 @@ Thumbs.db
 # Jupyter
 .ipynb_checkpoints/
 
-# CNN baseline (WIP)
-src/cnn_baseline.py
-
 # Advisor figures
 advisor_figures/
 
-# Paper (managed in Overleaf)
+# Paper working folders (kept local — this is a public repo)
 paper/
+tgrs_paper/
+access_paper/
+compgeo_paper/
+poster/
+seismic-poster-overleaf.zip
