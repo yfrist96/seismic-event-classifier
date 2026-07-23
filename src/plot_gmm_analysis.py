@@ -24,6 +24,7 @@ from sklearn.metrics import accuracy_score
 from sklearn.mixture import GaussianMixture
 from scipy.stats import shapiro, kstest, norm, probplot
 from scipy.optimize import brentq
+from scipy.integrate import trapezoid  # stable across NumPy 1.x/2.x (np.trapz removed in NumPy 2.0)
 
 from src.dataloader import load_data
 from src.classifier import FastMapSVMClassifier
@@ -184,7 +185,7 @@ def plot_decision_function_analysis(val_vals, y_val, test_vals, y_test, save_dir
     x_grid = np.linspace(val_vals.min() - 1, val_vals.max() + 1, 5000)
     pdf_eq = prior_eq * norm.pdf(x_grid, mu_eq, sigma_eq)
     pdf_ex = prior_ex * norm.pdf(x_grid, mu_ex, sigma_ex)
-    overlap = np.trapz(np.minimum(pdf_eq, pdf_ex), x_grid)
+    overlap = trapezoid(np.minimum(pdf_eq, pdf_ex), x_grid)
 
     misclass_eq = np.mean(eq_vals > 0)
     misclass_ex = np.mean(ex_vals < 0)
