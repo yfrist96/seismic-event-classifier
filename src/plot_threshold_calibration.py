@@ -5,6 +5,12 @@ Simulates operational deployment scenarios where the earthquake/explosion
 ratio differs from the test set, and shows the accuracy gain from
 Bayes-optimal threshold calibration at each prior.
 
+Out-of-sample basis (matches src/plot_gmm_analysis.py): the model is trained on
+the TRAIN split only, the per-class Gaussians and the Bayes-optimal thresholds
+are calibrated on the held-out VALIDATION set, and the prior-weighted accuracy at
+each deployment prior is evaluated on the disjoint TEST set. Calibration and
+evaluation therefore never share data.
+
 Usage: python -m src.plot_threshold_calibration
 """
 
@@ -42,20 +48,31 @@ def to_frequency_domain(X):
     return normalize(X_flat, axis=1, norm='l2')
 
 
-def run_calibration_analysis(decision_vals, y, save_dir):
+def run_calibration_analysis(val_vals, y_val, test_vals, y_test, save_dir):
     """Simulate Bayes-optimal threshold calibration at varying class priors.
 
-    Args:
-        decision_vals: SVM decision function values, shape (n_samples,).
-        y: true labels (0=Earthquake, 1=Explosion).
-        save_dir: directory to save outputs.
-    """
-    eq_vals = decision_vals[y == 0]
-    ex_vals = decision_vals[y == 1]
+    The per-class Gaussians and the Bayes-optimal threshold at each prior are
+    calibrated on the held-out VALIDATION decision values; the prior-weighted
+    accuracy is then evaluated on the disjoint TEST decision values. This matches
+    the out-of-sample protocol of the decision-function analysis
+    (src/plot_gmm_analysis.py).
 
-    # Fit per-class Gaussians
+    Args:
+        val_vals:  SVM decision-function values on the validation set (calibration).
+        y_val:     validation labels (0=Earthquake, 1=Explosion).
+        test_vals: SVM decision-function values on the test set (evaluation).
+        y_test:    test labels.
+        save_dir:  directory to save outputs.
+    """
+    # Calibration set (validation): fit the per-class Gaussians
+    eq_vals = val_vals[y_val == 0]
+    ex_vals = val_vals[y_val == 1]
     mu_eq, sigma_eq = norm.fit(eq_vals)
     mu_ex, sigma_ex = norm.fit(ex_vals)
+
+    # Evaluation set (test): empirical class-conditional decision values
+    test_eq_vals = test_vals[y_test == 0]
+    test_ex_vals = test_vals[y_test == 1]
 
     # Scenarios to evaluate
     scenarios = [
@@ -92,14 +109,14 @@ def run_calibration_analysis(decision_vals, y, save_dir):
             diffs = np.abs([posterior_diff(x) for x in x_grid])
             tau = x_grid[np.argmin(diffs)]
 
-        # Weighted accuracy at default threshold (t=0)
-        eq_correct_0 = np.mean(eq_vals < 0)
-        ex_correct_0 = np.mean(ex_vals > 0)
+        # Weighted accuracy at default threshold (t=0), evaluated on TEST
+        eq_correct_0 = np.mean(test_eq_vals < 0)
+        ex_correct_0 = np.mean(test_ex_vals > 0)
         acc_0 = prior_eq * eq_correct_0 + prior_ex * ex_correct_0
 
-        # Weighted accuracy at Bayes-optimal threshold
-        eq_correct_t = np.mean(eq_vals < tau)
-        ex_correct_t = np.mean(ex_vals > tau)
+        # Weighted accuracy at the validation-derived Bayes threshold, on TEST
+        eq_correct_t = np.mean(test_eq_vals < tau)
+        ex_correct_t = np.mean(test_ex_vals > tau)
         acc_t = prior_eq * eq_correct_t + prior_ex * ex_correct_t
 
         gain_pp = (acc_t - acc_0) * 100
@@ -158,12 +175,12 @@ def run_calibration_analysis(decision_vals, y, save_dir):
             t = 0
         tau_sweep.append(t)
 
-        eq0 = np.mean(eq_vals < 0)
-        ex0 = np.mean(ex_vals > 0)
+        eq0 = np.mean(test_eq_vals < 0)
+        ex0 = np.mean(test_ex_vals > 0)
         a0 = peq * eq0 + pe * ex0
 
-        eqt = np.mean(eq_vals < t)
-        ext = np.mean(ex_vals > t)
+        eqt = np.mean(test_eq_vals < t)
+        ext = np.mean(test_ex_vals > t)
         at = peq * eqt + pe * ext
 
         acc0_sweep.append(a0)
@@ -228,32 +245,36 @@ if __name__ == "__main__":
     print("Loading data...")
     (X_train_raw, y_train), (X_val_raw, y_val), (X_test_raw, y_test) = load_data(DATA_DIR)
 
-    # Combine train+val
-    X_trainval_raw = np.vstack([X_train_raw, X_val_raw])
-    y_trainval = np.concatenate([y_train, y_val])
-
-    # FFT features
+    # FFT features. The model is trained on the TRAIN split ONLY (matching
+    # src/plot_gmm_analysis.py), so the validation set is a genuine held-out
+    # calibration set: thresholds are derived from validation and evaluated on test.
     print("Computing FFT features...")
-    X_trainval_fft = to_frequency_domain(X_trainval_raw)
+    X_train_fft = to_frequency_domain(X_train_raw)
+    X_val_fft = to_frequency_domain(X_val_raw)
     X_test_fft = to_frequency_domain(X_test_raw)
 
-    # Train k=120 FastMap model (same seed as GMM analysis)
-    print("Training k=120 FastMap model...")
+    # Train k=120 FastMap model on TRAIN only (same seed as GMM analysis)
+    print("Training k=120 FastMap model (train split only)...")
     np.random.seed(42)
     model = FastMapSVMClassifier(k=120, dist_func='euclidean')
-    X_trainval_emb = model.fastmap.fit_transform(X_trainval_fft)
+    X_train_emb = model.fastmap.fit_transform(X_train_fft)
+    X_val_emb = model.fastmap.transform(X_val_fft)
     X_test_emb = model.fastmap.transform(X_test_fft)
 
     scaler = StandardScaler()
-    X_trainval_scaled = scaler.fit_transform(X_trainval_emb)
+    X_train_scaled = scaler.fit_transform(X_train_emb)
+    X_val_scaled = scaler.transform(X_val_emb)
     X_test_scaled = scaler.transform(X_test_emb)
 
     clf = SVC(C=1000, gamma=0.01, kernel='rbf', class_weight='balanced')
-    clf.fit(X_trainval_scaled, y_trainval)
+    clf.fit(X_train_scaled, y_train)
 
+    decision_vals_val = clf.decision_function(X_val_scaled)
     decision_vals_test = clf.decision_function(X_test_scaled)
+    val_acc = accuracy_score(y_val, clf.predict(X_val_scaled))
     test_acc = accuracy_score(y_test, clf.predict(X_test_scaled))
-    print(f"Single model test accuracy: {test_acc:.4f}\n")
+    print(f"Train-only model: validation accuracy = {val_acc:.4f}, test accuracy = {test_acc:.4f}\n")
 
-    # Run calibration analysis
-    run_calibration_analysis(decision_vals_test, y_test, PLOT_DIR)
+    # Calibrate the threshold on validation; evaluate the prior sweep on test.
+    run_calibration_analysis(decision_vals_val, y_val,
+                             decision_vals_test, y_test, PLOT_DIR)
