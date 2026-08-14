@@ -2,6 +2,13 @@
 
 A machine learning system for classifying seismic events as **Earthquakes** or **Explosions** using FastMap dimensionality reduction, FFT-based feature engineering, SVM classification with ensemble voting, and Bayes-optimal decision threshold calibration.
 
+Reference implementation for the manuscript *"A Frequency-Domain FastMap-SVM Ensemble for CPU-Efficient,
+Near Real-Time Earthquake-Explosion Discrimination"* (submitted to **Computers & Geosciences**).
+Reproduces every figure and table in the paper. Runs on a commodity CPU: no GPU required.
+
+**Headline results** — 93.90% window-level and 96.97% event-level accuracy on a held-out test set of
+1,327 station-windows from 165 events, against 62.62% for a Random Forest baseline.
+
 ## Project Goal
 
 - Classify seismic waveforms as earthquakes or explosions
@@ -60,6 +67,18 @@ seismic-event-classifier/
 ```
 
 ## Pipeline
+
+### Waveform preprocessing (upstream of this repository's models)
+
+Windows are produced by `SeismicDataset/400_extract_event_wfs_antelope.py` from the continuous archive:
+
+- **Window**: 3.0 s per station — 0.5 s before to 2.5 s after the **catalogued P arrival at that
+  station** (not the event origin time), at 200 Hz, giving 600 samples per channel.
+- **Filter**: 1–20 Hz bandpass, applied with a 5 s lead-in buffer that is then discarded so filter
+  transients fall outside the retained window.
+- **Channels**: three components (Z, N, E), from the first available of HH\*, BH\*, SH\*, EN\*.
+- **Station selection**: a station is kept only if it yields at least 20 valid earthquake and 20 valid
+  explosion windows; 12 of 111 stations qualified.
 
 ```
 Raw Seismic Data (N, 600, 3)     600 timesteps x 3 channels (Z, N, E)
@@ -129,9 +148,9 @@ We swept across 4 axes to isolate the contribution of each design choice:
 
 **1. FFT is the single most important factor**
 
-FFT features outperform time-domain features by 5-22 percentage points across most distance metrics and k values. The best time-domain result (Lorentzian, k=120, ensemble: 79.73%) is still far below the worst competitive FFT result.
+FFT features outperform time-domain features in 35 of the 36 matched configurations; for k >= 10 the margin runs from 2.3 to 24.0 percentage points. The best time-domain result (Lorentzian, k=120, ensemble: 79.73%) is still far below the best FFT result (93.90%). The single exception is Lorentzian at k=2, where a two-dimensional embedding is too coarse for either representation.
 
-This works because FFT makes the representation **shift-invariant** -- seismic events have variable arrival times, so time-domain distances are dominated by alignment noise. FFT captures *what* energy is present, not *when* it arrives.
+The reason is that the discriminants for this problem are spectral. Explosions radiate relatively more high-frequency energy, have a higher corner frequency, and produce flatter spectra than earthquakes of comparable size, so a log-spectral representation exposes exactly the properties that separate the classes and lets the SVM weight the frequency bands from data. Note that windows are cut relative to the P arrival at each station, so arrival-time alignment is handled by the windowing, not by the transform.
 
 **2. Euclidean distance dominates on FFT features**
 
@@ -423,11 +442,49 @@ calibrator.fit(decision_vals, y_labels, priors={0: 0.05, 1: 0.95})
 
 ## Requirements
 
-- Python 3.12+
-- numpy, h5py, scikit-learn, scipy, matplotlib, joblib
+- Python 3.8+ (developed and tested on 3.12)
+- numpy >= 1.21, scipy >= 1.7, scikit-learn >= 1.0, h5py >= 3.1, matplotlib >= 3.4, joblib >= 1.1
+- No GPU or other accelerator required. Timings in the paper were measured on an Apple M4 (Mac mini, 16 GB RAM).
+
+## Data availability
+
+The three-component waveform dataset and event catalogs analysed in this work were provided by the
+Geological Survey of Israel and are shared with its permission under the Creative Commons
+Attribution-NonCommercial 4.0 (CC BY-NC 4.0) licence:
+
+- Zenodo: https://doi.org/10.5281/zenodo.21507738
+
+The HDF5 splits under `data/` are not tracked in this repository; download them from the Zenodo record
+and place them in `data/` before running the pipeline.
+
+## Citation
+
+If you use this software or the accompanying dataset, please cite:
+
+```bibtex
+@article{frist_earthquake_explosion,
+  author  = {Frist, Yehuda and Partouche, Yossi and Sogavker, Ido and Gorstein, Marina
+             and Polozov, Andrey and Navon, Hila and Cohen, Sarel and Kurzon, Ittai},
+  title   = {A Frequency-Domain {FastMap-SVM} Ensemble for {CPU}-Efficient,
+             Near Real-Time Earthquake-Explosion Discrimination},
+  journal = {Computers \& Geosciences},
+  note    = {Submitted},
+  year    = {2026}
+}
+```
+
+## Licence
+
+Source code is released under the MIT Licence (see `LICENSE`). The dataset is licensed separately under
+CC BY-NC 4.0 via the Zenodo record above.
 
 ## Authors
 
-- Yehuda Frist
-- Yossi Partouche
-- Ido Sogavker
+- Yehuda Frist (Reichman University) — corresponding author, yehuda.frist@post.runi.ac.il
+- Yossi Partouche (Reichman University)
+- Ido Sogavker (Reichman University)
+- Marina Gorstein (Geological Survey of Israel)
+- Andrey Polozov (Geological Survey of Israel)
+- Hila Navon (Geological Survey of Israel)
+- Sarel Cohen (Reichman University)
+- Ittai Kurzon (Geological Survey of Israel)
