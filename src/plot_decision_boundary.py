@@ -24,6 +24,7 @@ from src.classifier import FastMapSVMClassifier
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_DIR = os.path.join(PROJECT_ROOT, "data")
 PLOT_DIR = os.path.join(PROJECT_ROOT, "output", "decision_boundary_plots")
+SAMPLE_RATE = 200  # Hz (see data/README.md)
 
 
 def save_figure(fig, path_without_ext):
@@ -234,8 +235,7 @@ def plot_average_spectra(X_train_raw, y_train, save_dir):
     print("  Generating average spectra per class...")
 
     X_fft = to_frequency_domain_raw(X_train_raw)  # (N, 301, 3)
-    sample_rate = 100
-    freqs = np.fft.rfftfreq(600, d=1.0/sample_rate)
+    freqs = np.fft.rfftfreq(600, d=1.0/SAMPLE_RATE)
 
     channel_names = ['Vertical (Z)', 'North-South (N)', 'East-West (E)']
     fig, axes = plt.subplots(3, 1, figsize=(14, 12), sharex=True)
@@ -276,8 +276,7 @@ def plot_spectral_difference(X_train_raw, y_train, save_dir):
     print("  Generating spectral difference plot...")
 
     X_fft = to_frequency_domain_raw(X_train_raw)
-    sample_rate = 100
-    freqs = np.fft.rfftfreq(600, d=1.0/sample_rate)
+    freqs = np.fft.rfftfreq(600, d=1.0/SAMPLE_RATE)
 
     channel_names = ['Vertical (Z)', 'North-South (N)', 'East-West (E)']
     channel_colors = ['#2ecc71', '#3498db', '#e74c3c']
@@ -317,7 +316,7 @@ def plot_example_waveforms(X_train_raw, y_train, save_dir):
     eq_idx = np.random.choice(np.where(y_train == 0)[0])
     ex_idx = np.random.choice(np.where(y_train == 1)[0])
 
-    t = np.arange(600) / 100.0
+    t = np.arange(600) / SAMPLE_RATE
 
     for ch in range(3):
         axes[0, ch].plot(t, X_train_raw[eq_idx, :, ch], color='#3498db', linewidth=0.8)
@@ -351,8 +350,7 @@ def plot_example_spectra(X_train_raw, y_train, save_dir):
     eq_idx = np.random.choice(np.where(y_train == 0)[0])
     ex_idx = np.random.choice(np.where(y_train == 1)[0])
 
-    sample_rate = 100
-    freqs = np.fft.rfftfreq(600, d=1.0/sample_rate)
+    freqs = np.fft.rfftfreq(600, d=1.0/SAMPLE_RATE)
     X_fft = to_frequency_domain_raw(X_train_raw)
 
     for ch in range(3):

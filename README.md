@@ -56,6 +56,7 @@ seismic-event-classifier/
 │   └── post_review/
 │       ├── export_test_predictions.py    # Export window-level test predictions to CSV
 │       ├── event_level_predictions.py    # Aggregate to event-level via majority vote
+│       ├── p_only_and_distance.py        # P- vs S-onset accuracy; distance baseline and matched-distance accuracy
 │       ├── export_advisor_table.py       # Generate advisor review tables
 │       ├── plot_station_map.py           # Station map visualization
 │       └── extract_example_waveforms.py  # Extract example waveforms for figures
@@ -72,8 +73,10 @@ seismic-event-classifier/
 
 Windows are produced by `SeismicDataset/400_extract_event_wfs_antelope.py` from the continuous archive:
 
-- **Window**: 3.0 s per station — 0.5 s before to 2.5 s after the **catalogued P arrival at that
-  station** (not the event origin time), at 200 Hz, giving 600 samples per channel.
+- **Window**: 3.0 s — 0.5 s before to 2.5 s after a **cataloged phase arrival at that station** (not the
+  event origin time), at 200 Hz, giving 600 samples per channel. Each station contributes up to two
+  windows per event, one aligned on the P arrival and one on the S arrival (4,642 P-onset and 4,463
+  S-onset windows); `python -m src.post_review.p_only_and_distance` writes per-window phase labels.
 - **Filter**: 1–20 Hz bandpass, applied with a 5 s lead-in buffer that is then discarded so filter
   transients fall outside the retained window.
 - **Channels**: three components (Z, N, E), from the first available of HH\*, BH\*, SH\*, EN\*.
@@ -150,7 +153,7 @@ We swept across 4 axes to isolate the contribution of each design choice:
 
 FFT features outperform time-domain features in 35 of the 36 matched configurations; for k >= 10 the margin runs from 2.3 to 24.0 percentage points. The best time-domain result (Lorentzian, k=120, ensemble: 79.73%) is still far below the best FFT result (93.90%). The single exception is Lorentzian at k=2, where a two-dimensional embedding is too coarse for either representation.
 
-The reason is that the discriminants for this problem are spectral. Explosions radiate relatively more high-frequency energy, have a higher corner frequency, and produce flatter spectra than earthquakes of comparable size, so a log-spectral representation exposes exactly the properties that separate the classes and lets the SVM weight the frequency bands from data. Note that windows are cut relative to the P arrival at each station, so arrival-time alignment is handled by the windowing, not by the transform.
+The reason is that the discriminants for this problem are spectral, so a log-spectral representation exposes the properties that separate the classes and lets the SVM weight the frequency bands from data. In this dataset the spectral contrast reflects propagation as well as source: explosions are recorded at about 2.5× the distance of earthquakes, and window-level accuracy at matched distance is 86.8% (see `src/post_review/p_only_and_distance.py`). Windows are cut relative to the phase arrival at each station, so arrival-time alignment is handled by the windowing, not by the transform.
 
 **2. Euclidean distance dominates on FFT features**
 
@@ -401,6 +404,12 @@ python -m src.post_review.export_test_predictions
 python -m src.post_review.event_level_predictions
 ```
 
+### P-Onset Accuracy and Distance Checks
+
+```bash
+python -m src.post_review.p_only_and_distance
+```
+
 ### Model Loading
 
 ```python
@@ -448,11 +457,11 @@ calibrator.fit(decision_vals, y_labels, priors={0: 0.05, 1: 0.95})
 
 ## Data availability
 
-The three-component waveform dataset and event catalogs analysed in this work were provided by the
+The three-component waveform dataset and event catalogs analyzed in this work were provided by the
 Geological Survey of Israel and are shared with its permission under the Creative Commons
-Attribution-NonCommercial 4.0 (CC BY-NC 4.0) licence:
+Attribution-NonCommercial 4.0 (CC BY-NC 4.0) license:
 
-- Zenodo: https://doi.org/10.5281/zenodo.21507738
+- Zenodo: https://doi.org/10.5281/zenodo.24137901
 
 The HDF5 splits under `data/` are not tracked in this repository; download them from the Zenodo record
 and place them in `data/` before running the pipeline.
@@ -473,9 +482,9 @@ If you use this software or the accompanying dataset, please cite:
 }
 ```
 
-## Licence
+## License
 
-Source code is released under the MIT Licence (see `LICENSE`). The dataset is licensed separately under
+Source code is released under the MIT License (see `LICENSE`). The dataset is licensed separately under
 CC BY-NC 4.0 via the Zenodo record above.
 
 ## Authors
