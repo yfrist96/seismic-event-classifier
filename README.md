@@ -59,6 +59,7 @@ seismic-event-classifier/
 │       ├── p_only_and_distance.py        # P- vs S-onset accuracy; distance baseline and matched-distance accuracy
 │       ├── export_advisor_table.py       # Generate advisor review tables
 │       ├── plot_station_map.py           # Station map visualization
+│       ├── plot_advisor_examples.py      # Paper Fig. 2 (example pair) and Fig. 6 (spectra and ratio)
 │       └── extract_example_waveforms.py  # Extract example waveforms for figures
 ├── figures/                              # Figures embedded in this README
 ├── advisor_figures/                      # Figures contributed by domain advisor (GSI)
@@ -119,7 +120,9 @@ Raw Seismic Data (N, 600, 3)     600 timesteps x 3 channels (Z, N, E)
 
 After selecting the best hyperparameters on the validation set, the model is retrained on **train + val combined** before evaluating on test. The test set is never seen during tuning.
 
-![Average Spectra](figures/average_spectra.png)
+![Spectra and explosion/earthquake ratio for one event pair](figures/spectra_and_ratio_by_channel.png)
+
+Paper Fig. 6: per-channel spectra of one earthquake (event 123583 at OFRI) and one explosion (event 399313 at ZFRI), the same pair as the paper's Fig. 2. Top: spectra normalized to each channel's peak. Bottom: log10 explosion/earthquake ratio. The band outside the 1-20 Hz bandpass is shaded.
 
 ## Ablation Study
 
@@ -218,83 +221,86 @@ python -m src.post_review.event_level_predictions
 
 ## Statistical Analysis of the Decision Function
 
-We observed that the SVM decision function values for each class closely resemble Gaussian distributions. To rigorously validate this and exploit it, we conducted a deep statistical analysis on a single SVM model (FFT + Euclidean, k=120). The ensemble uses majority voting across 5 models and does not produce a single decision function, so the distributional analysis characterizes individual models within the ensemble.
+The SVM decision-function values for each class closely resemble Gaussian distributions. We analyze this on a single SVM model (FFT + Euclidean, k=120): the ensemble combines five models by majority vote and has no single decision function, so the analysis characterizes the individual models within it. Following the paper's out-of-sample protocol, the analysis model is trained on the training split, every quantity below is calibrated on the validation split, and the test split is used only for evaluation (paper Section 5.8; Supplementary Material, Sections S-III and S-IV).
 
 ### Gaussian Mixture Model Validation
 
-We fit individual Gaussians to each class's decision function values and separately fit a 2-component GMM to the combined (unlabeled) decision values.
+We fit a Gaussian to each class's validation decision values and, separately, a 2-component GMM to the pooled (unlabeled) validation decision values.
 
-| Parameter | Earthquake | Explosion |
-|-----------|-----------|-----------|
-| Mean (mu) | -1.07 | +1.06 |
-| Std (sigma) | 0.76 | 0.71 |
-| n | 565 | 762 |
+| Fit | Class | Mean (mu) | Std (sigma) | Weight |
+|-----|-------|-----------|-------------|--------|
+| Supervised | Earthquake (n=650) | -1.00 | 0.75 | 0.450 |
+| Supervised | Explosion (n=794) | +0.98 | 0.67 | 0.550 |
+| Unsupervised GMM | Component 1 | -1.03 | 0.71 | 0.452 |
+| Unsupervised GMM | Component 2 | +1.01 | 0.63 | 0.548 |
 
 ![Decision Function Analysis](figures/decision_function_analysis.png)
 
-**The unsupervised GMM recovers the class structure without labels.** The 2-component GMM (fitted on unlabeled decision values) finds components at mu=-1.08 and mu=+1.11 with weights 0.44/0.56 -- nearly identical to the supervised fits and the true class proportions (42.6%/57.4%). This confirms that the class separation in the SVM's decision space is intrinsic to the data, not an artifact of the classifier.
+**The unsupervised GMM recovers the class structure without labels.** Its component means lie within 0.05 of the supervised means, and its weights within 0.02 of the validation class proportions (45.0%/55.0%). The two-class structure is therefore intrinsic to the decision function rather than an artifact of supervised fitting.
 
-**Model selection strongly favors 2 components.** BIC comparison: 1-component BIC=4437.0, 2-component BIC=4227.5, delta_BIC=209.5. A delta_BIC > 10 is conventionally considered "very strong evidence" (Kass & Raftery, 1995), making this result unambiguous.
+**Model selection favors 2 components.** BIC is 4667.9 for one component and 4481.7 for two (delta_BIC ≈ 186). Because delta_BIC approximates twice the log Bayes factor, it can be read on the Kass & Raftery (1995) scale, where values above 10 count as "very strong" evidence; 186 is far beyond that.
 
 ### Normality Tests
 
-| Test | Earthquake | Explosion |
+| Test | Earthquake (n=650) | Explosion (n=794) |
 |------|-----------|-----------|
-| Shapiro-Wilk W | 0.9971 (p=0.403) | 0.9908 (p=1.0×10⁻⁴) |
-| Kolmogorov-Smirnov D | 0.0296 (p=0.694) | 0.0339 (p=0.338) |
+| Shapiro-Wilk W | 0.9969 (p=0.247) | 0.9956 (p=0.023) |
+| Kolmogorov-Smirnov D | 0.0246 (p=0.815) | 0.0349 (p=0.283) |
 
-The KS test cannot reject normality for either class (p > 0.33), confirming the Gaussian assumption. The Shapiro-Wilk test, which is more sensitive to tail deviations, detects statistically significant but practically negligible departures (W > 0.99 in both cases). The Q-Q plots show these deviations are limited to the extreme tails.
+The KS test cannot reject normality for either class. The more tail-sensitive Shapiro-Wilk test flags a statistically significant but small departure for the explosion class (W > 0.99 for both classes); the Q-Q plots show that the deviations are confined to the extreme tails.
 
 ### Sensitivity Index (d-prime)
 
-The d-prime (d') from signal detection theory provides a single scalar measuring class separability:
+The d-prime (d') from signal detection theory measures class separability as the distance between the class means in pooled standard deviations:
 
-$$d' = \frac{|\mu_{EX} - \mu_{EQ}|}{\sqrt{(\sigma_{EQ}^2 + \sigma_{EX}^2)/2}} = 2.91$$
+$$d' = \frac{|\mu_{EX} - \mu_{EQ}|}{\sqrt{(\sigma_{EQ}^2 + \sigma_{EX}^2)/2}}$$
 
-A d' of 2.91 corresponds to approximately 93% correct classification under optimal conditions (equal-variance Gaussian model), which closely matches our observed test accuracy. In psychophysics and signal detection literature, d' > 2 is considered "excellent" discriminability.
+With the validation fits, d' = 2.78; the same class-conditional model gives d' = 2.87 on the held-out test set. For two equal-variance Gaussians, a d' in this range corresponds to an ideal-observer accuracy of about 92%, close to the single SVM's test accuracy (92.09%).
 
 ### Bayes-Optimal Threshold Calibration
 
-The standard SVM decision boundary sits at `decision_function(x) = 0`, which implicitly assumes equal class priors. However, our test set has 762 explosions vs 565 earthquakes (57%/43%). The Bayes-optimal threshold accounts for this imbalance by finding where the prior-weighted posterior densities cross:
+The standard SVM decision boundary sits at `decision_function(x) = 0`, which implicitly assumes equal class priors. The Bayes-optimal threshold is where the prior-weighted class densities cross:
 
 $$P(EQ) \cdot \mathcal{N}(x; \mu_{EQ}, \sigma_{EQ}) = P(EX) \cdot \mathcal{N}(x; \mu_{EX}, \sigma_{EX})$$
 
-| Threshold | Accuracy |
-|-----------|----------|
-| SVM default (t=0.000) | 92.54% |
-| Bayes-optimal (t=-0.063) | 92.24% |
-| Empirical best (t=+0.011) | 92.77% |
+With the validation fits and validation priors (45% earthquakes, 55% explosions), tau* = -0.034. On the held-out test set:
 
-The empirically swept optimum yields a **+0.23pp improvement** with no retraining -- purely a post-hoc adjustment. The close agreement between the Bayes-optimal threshold and the SVM default confirms that the SVM is already operating near the Bayes-optimal decision boundary.
+| Threshold | Value | Test accuracy |
+|-----------|-------|---------------|
+| SVM default | t = 0.000 | 92.09% |
+| Bayes-optimal (from validation) | t = -0.034 | 92.09% |
+| Test-set oracle | t = -0.045 | 92.09% |
+
+At these near-balanced priors the SVM default is already at the Bayes-optimal point, and calibration changes nothing (+0.00 pp).
 
 The `BayesThresholdCalibrator` class in `classifier.py` implements this. It also accepts custom priors for deployment scenarios with different class ratios (e.g., real-world monitoring where explosions vastly outnumber earthquakes).
 
 ### Calibration Under Deployment Imbalance
 
-In operational monitoring, explosions may outnumber earthquakes by 10:1 or more. We simulated this by computing prior-weighted accuracy under varying explosion priors:
+In operational monitoring the class mix can be far more imbalanced than in a curated dataset. We simulated this by computing prior-weighted test accuracy under varying explosion priors, with tau* derived from the validation-calibrated Gaussians:
 
 | Scenario | π_EX | Threshold τ* | Acc (t=0) | Gain |
 |----------|------|-------------|-----------|------|
-| Balanced | 50% | +0.012 | 92.50% | +0.27pp |
-| Test set | 57% | −0.063 | 92.54% | −0.30pp |
-| Moderate | 70% | −0.200 | 92.61% | +0.47pp |
-| High | 80% | −0.333 | 92.67% | +0.92pp |
-| Severe | 90% | −0.530 | 92.73% | **+3.27pp** |
-| Operational | 95% | −0.710 | 92.75% | **+4.82pp** |
-| Extreme | 99% | −1.101 | 92.78% | **+6.21pp** |
+| Balanced | 50% | +0.016 | 92.10% | −0.11pp |
+| Test set | 57% | −0.059 | 92.09% | −0.15pp |
+| Moderate | 70% | −0.196 | 92.06% | +0.56pp |
+| High | 80% | −0.328 | 92.04% | +1.73pp |
+| Severe | 90% | −0.523 | 92.02% | **+4.24pp** |
+| Operational | 95% | −0.699 | 92.01% | **+5.50pp** |
+| Extreme | 99% | −1.077 | 92.00% | **+6.86pp** |
 
-At our test set balance, the SVM default is already near-optimal. But at realistic operational ratios (90-99% explosions), the calibration provides **3-6pp for free** — no retraining, just a threshold shift derived from the fitted Gaussians.
+At the test-set balance the SVM default is already near-optimal. As the explosion prior rises, calibration gains 4-7 pp with no retraining, only a threshold shift derived from the fitted Gaussians. These gains come from reweighting the test set; validation on a genuinely imbalanced operational catalog is still to be done.
 
 ![Threshold Calibration](figures/threshold_calibration.png)
 
 ### Overlap Analysis
 
-The overlap coefficient between the two class distributions is 0.0712 (7.12%), computed as the integral of the minimum of the two prior-weighted PDFs. This represents the theoretical lower bound on the Bayes error rate -- no classifier operating on the SVM decision function alone can achieve less than ~7% misclassification.
+The overlap coefficient between the two prior-weighted class distributions is 0.081 (8.1%), a lower bound on the Bayes error for any classifier operating on the decision function alone. The empirical validation error rates are close to this bound:
 
-- Earthquakes beyond SVM boundary: 7.8%
-- Explosions beyond SVM boundary: 7.2%
+- Earthquakes beyond the SVM boundary: 9.5%
+- Explosions beyond the SVM boundary: 8.7%
 
-The near-symmetry of the misclassification rates (despite unequal priors) is a consequence of `class_weight='balanced'` in the SVM, which adjusts the margin during training to equalize per-class error rates.
+The near-symmetry of the per-class error rates despite unequal priors follows from `class_weight='balanced'` in the SVM, which equalizes each class's contribution to the soft-margin loss.
 
 ## Generated Plots
 
@@ -330,6 +336,17 @@ Saved to `output/decision_boundary_plots/` by running `python -m src.plot_decisi
 | `spectral_difference.png` | Explosion minus earthquake mean spectrum — shows which frequencies are discriminative |
 | `example_waveforms.png` | Single earthquake vs explosion raw waveform comparison |
 | `example_spectra.png` | FFT spectra of the same example events |
+
+Note: `plot_decision_boundary` draws its example pair at random and writes it to `example_waveforms` and `example_spectra`, overwriting the paper's Fig. 2 files. Run the commands under "Generate the Paper's Figures 2 and 6" afterwards to restore them.
+
+### Paper Figures 2 and 6
+
+Saved to `output/decision_boundary_plots/` by `src/post_review/plot_advisor_examples.py`, for earthquake 123583 at OFRI and explosion 399313 at ZFRI:
+
+| Plot | Description |
+|------|-------------|
+| `example_waveforms.pdf`, `example_spectra.pdf` | Fig. 2: three-component waveforms and spectra of the pair |
+| `spectra_and_ratio_by_channel.pdf` | Fig. 6: per-channel peak-normalized spectra of the pair (top) and log10 explosion/earthquake ratio (bottom) |
 
 ### GMM Statistical Analysis
 
@@ -379,6 +396,15 @@ python -m src.plot_ablation
 ```bash
 python -m src.plot_decision_boundary
 ```
+
+### Generate the Paper's Figures 2 and 6
+
+```bash
+python -m src.post_review.plot_advisor_examples
+python -c "from src.post_review.plot_advisor_examples import plot_spectra_and_ratio_pair; plot_spectra_and_ratio_pair(123583, 'OFRI', 399313, 'ZFRI', fmax=60.0)"
+```
+
+The first command writes Fig. 2 and the second Fig. 6.
 
 ### Generate GMM Statistical Analysis
 
