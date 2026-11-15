@@ -11,6 +11,17 @@ are calibrated on the held-out VALIDATION set, and the prior-weighted accuracy a
 each deployment prior is evaluated on the disjoint TEST set. Calibration and
 evaluation therefore never share data.
 
+Besides prior-weighted accuracy, the script reports per-class recall at each
+threshold and the accuracy of the constant "always explosion" rule, because the
+accuracy-optimal threshold under heavy explosion priors trades earthquake recall
+for explosion recall. It also derives, from the same validation Gaussians, the
+threshold that holds a target earthquake recall (a Neyman-Pearson operating
+point) and reports the explosion recall that results on the test set.
+
+The analysis assumes label shift: only the class mix changes between the
+calibration data and deployment, while the class-conditional distribution of
+the decision values stays the same.
+
 Usage: python -m src.plot_threshold_calibration
 """
 
@@ -90,10 +101,12 @@ def run_calibration_analysis(val_vals, y_val, test_vals, y_test, save_dir):
     accs_default = []
     accs_calibrated = []
     gains = []
+    recalls = []  # (EQ recall t=0, EX recall t=0, EQ recall tau*, EX recall tau*)
 
     print("  === Threshold Calibration Under Varying Priors ===\n")
-    print(f"  {'Scenario':<20} {'π_EX':>6} {'τ*':>8} {'Acc(t=0)':>9} {'Acc(τ*)':>9} {'Gain':>8}")
-    print("  " + "-" * 60)
+    print(f"  {'Scenario':<20} {'π_EX':>6} {'τ*':>8} {'Acc(t=0)':>9} {'Acc(τ*)':>9} {'Gain':>8}"
+          f" {'EQrec(τ*)':>10} {'EXrec(τ*)':>10} {'AlwaysEX':>9}")
+    print("  " + "-" * 92)
 
     for name, prior_ex in scenarios:
         prior_eq = 1.0 - prior_ex
@@ -126,8 +139,33 @@ def run_calibration_analysis(val_vals, y_val, test_vals, y_test, save_dir):
         accs_default.append(acc_0)
         accs_calibrated.append(acc_t)
         gains.append(gain_pp)
+        recalls.append((eq_correct_0, ex_correct_0, eq_correct_t, ex_correct_t))
 
-        print(f"  {name:<20} {prior_ex:>5.0%} {tau:>+8.3f} {acc_0:>8.2%} {acc_t:>9.2%} {gain_pp:>+7.2f}pp")
+        # Constant "always explosion" rule: its accuracy equals the explosion prior
+        print(f"  {name:<20} {prior_ex:>5.0%} {tau:>+8.3f} {acc_0:>8.2%} {acc_t:>9.2%} {gain_pp:>+7.2f}pp"
+              f" {eq_correct_t:>10.2%} {ex_correct_t:>10.2%} {prior_ex:>9.2%}")
+
+    # --- Neyman-Pearson operating points: hold a target earthquake recall ---
+    # tau_NP is the validation-Gaussian quantile that keeps the requested share of
+    # earthquakes below the threshold; recalls are then measured on TEST. The
+    # threshold does not depend on the class prior.
+    target_points = []
+    print("\n  === Thresholds for a Target Earthquake Recall (validation Gaussians, test recall) ===\n")
+    print(f"  {'Target EQ rec':>13} {'τ_NP':>8} {'EQrec(test)':>12} {'EXrec(test)':>12} {'EXrec(model)':>13}")
+    print("  " + "-" * 62)
+    for target in (0.90, 0.95, 0.99):
+        tau_np = norm.ppf(target, mu_eq, sigma_eq)
+        eq_rec = np.mean(test_eq_vals < tau_np)
+        ex_rec = np.mean(test_ex_vals > tau_np)
+        ex_rec_model = 1.0 - norm.cdf(tau_np, mu_ex, sigma_ex)
+        target_points.append({
+            "target_eq_recall": target,
+            "threshold": round(float(tau_np), 4),
+            "eq_recall_test": round(float(eq_rec), 4),
+            "ex_recall_test": round(float(ex_rec), 4),
+            "ex_recall_model": round(float(ex_rec_model), 4),
+        })
+        print(f"  {target:>13.0%} {tau_np:>+8.3f} {eq_rec:>12.2%} {ex_rec:>12.2%} {ex_rec_model:>13.2%}")
 
     # --- Save results as JSON ---
     results = {
@@ -143,10 +181,16 @@ def run_calibration_analysis(val_vals, y_val, test_vals, y_test, save_dir):
                 "acc_default": round(acc_0, 4),
                 "acc_calibrated": round(acc_t, 4),
                 "gain_pp": round(g, 2),
+                "eq_recall_default": round(float(r[0]), 4),
+                "ex_recall_default": round(float(r[1]), 4),
+                "eq_recall_calibrated": round(float(r[2]), 4),
+                "ex_recall_calibrated": round(float(r[3]), 4),
+                "acc_always_explosion": round(prior_ex, 4),
             }
-            for (name, prior_ex), tau, acc_0, acc_t, g
-            in zip(scenarios, thresholds, accs_default, accs_calibrated, gains)
+            for (name, prior_ex), tau, acc_0, acc_t, g, r
+            in zip(scenarios, thresholds, accs_default, accs_calibrated, gains, recalls)
         ],
+        "target_eq_recall": target_points,
     }
     json_path = os.path.join(save_dir, "threshold_calibration_results.json")
     with open(json_path, "w") as f:
@@ -162,6 +206,7 @@ def run_calibration_analysis(val_vals, y_val, test_vals, y_test, save_dir):
     acc0_sweep = []
     acct_sweep = []
     gain_sweep = []
+    eqrec_sweep = []
 
     for pe in prior_sweep:
         peq = 1.0 - pe
@@ -186,6 +231,7 @@ def run_calibration_analysis(val_vals, y_val, test_vals, y_test, save_dir):
         acc0_sweep.append(a0)
         acct_sweep.append(at)
         gain_sweep.append((at - a0) * 100)
+        eqrec_sweep.append(eqt)
 
     # Left panel: accuracy curves
     ax1.plot(prior_sweep, [a * 100 for a in acc0_sweep], color='#e74c3c',
@@ -196,10 +242,14 @@ def run_calibration_analysis(val_vals, y_val, test_vals, y_test, save_dir):
                       [a * 100 for a in acc0_sweep],
                       [a * 100 for a in acct_sweep],
                       alpha=0.15, color='#2ecc71')
+    ax1.plot(prior_sweep, [100 * pe for pe in prior_sweep], color='black',
+             linewidth=1.2, linestyle=':', label='Always explosion')
+    ax1.plot(prior_sweep, [r * 100 for r in eqrec_sweep], color='#2980b9',
+             linewidth=2, linestyle='--', label='EQ recall at τ*')
     ax1.axvline(x=0.574, color='gray', linestyle='--', alpha=0.5, label='Test set prior')
     ax1.set_xlabel('Explosion Prior (π_EX)', fontsize=12)
-    ax1.set_ylabel('Accuracy (%)', fontsize=12)
-    ax1.set_title('Classification Accuracy vs Class Prior', fontweight='bold')
+    ax1.set_ylabel('Accuracy / recall (%)', fontsize=12)
+    ax1.set_title('Accuracy and Earthquake Recall vs Class Prior', fontweight='bold')
     ax1.legend(fontsize=10)
     ax1.grid(alpha=0.3)
     ax1.set_xlim(0.5, 0.99)
