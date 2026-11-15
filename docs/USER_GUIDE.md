@@ -139,12 +139,13 @@ FastMap(n_components=2, dist_func='euclidean')
   `priors[0]·N(x; mu_eq, sigma_eq) = priors[1]·N(x; mu_ex, sigma_ex)`. `y` must use 0/1 labels.
   `priors` is a dict `{0: P(EQ), 1: P(EX)}`; the default is the class frequencies in `y`. The
   priors are not checked (only their ratio affects the threshold).
-- Root search is restricted to the interval between the two class means: `brentq` on
-  `[mu_eq, mu_ex]`, and, if no sign change exists there, the point of that interval where the two
-  weighted densities are closest. With extreme priors the threshold is therefore clipped to a class
-  mean. Example (validation fits of the quickstart model): for P(EX) = 0.99 the class returns
-  −1.001 (= mu_eq), whereas `src/plot_threshold_calibration.py`, which searches `[-4, 4]`,
-  reports −1.077. For P(EX) between 0.5 and 0.95 the two agree.
+- Root search: `brentq` between the two class means. With extreme priors the crossing lies
+  beyond a class mean, so the bracket is then widened outward one standard deviation at a time
+  (up to 20) until it contains a sign change; the weighted densities cross at most twice, and this
+  finds the crossing nearest the bulk of the data. If no crossing exists (one weighted density
+  dominates everywhere), it falls back to the point between the means where the two weighted
+  densities are closest. Example (validation fits of the quickstart model): P(EX) = 0.99 gives
+  −1.077, the same as `src/plot_threshold_calibration.py`.
 - `predict(decision_vals)` → `(decision_vals > threshold).astype(int)`.
 - Attributes after `fit`: `threshold`, `mu_eq`, `sigma_eq`, `mu_ex`, `sigma_ex`, `priors`,
   `is_calibrated`.
@@ -184,6 +185,7 @@ raw `(N, 600, 3)` windows.
 | `use_fft` | `[True, False]` | Feature domains: FFT features and/or flattened raw waveform |
 | `use_ensemble` | `[True, False]` | **Not read by any code**: every configuration runs both single and ensemble |
 | `ensemble_n_models` | `5` | Voters per ensemble |
+| `seed` | `42` | NumPy seed set once at the start of the sweep, so reruns are repeatable; `None` for unseeded. The published results came from an unseeded run |
 | `svm_param_grid` | 12 combinations | RBF: `C` ∈ {1000, 5000, 10000, 20000}, `gamma=0.01`, `class_weight` ∈ {`'balanced'`, `None`}; polynomial: `C=1000`, `gamma=0.01`, `degree` ∈ {2, 3}, `coef0` ∈ {0, 1}, `class_weight='balanced'` |
 | `output_dir` | `<repo>/output/ablation` | Where results are written |
 | `data_dir` | `<repo>/data` | Where the HDF5 splits are read |
@@ -215,8 +217,8 @@ accuracies:
 
 | Where | FastMap fitted on | SVM trained on | Seed | Test accuracy |
 |---|---|---|---|---|
-| `ablation.py`, single | train | train + val (after tuning on val) | none | 92.31% (published run) |
-| `ablation.py`, ensemble voters | train + val | train + val | none | 93.90% (published run) |
+| `ablation.py`, single | train | train + val (after tuning on val) | 42 (published run: none) | 92.31% (published run) |
+| `ablation.py`, ensemble voters | train + val | train + val | 42 (published run: none) | 93.90% (published run) |
 | `plot_decision_boundary.py` | train + val | train + val | 42 | printed by the script |
 | `plot_gmm_analysis.py`, `plot_threshold_calibration.py`, `examples/quickstart.py` | train | train | 42 | 92.09% |
 
@@ -224,14 +226,15 @@ accuracies:
 
 | Command | Reads | Writes | Run time |
 |---|---|---|---|
-| `python -m src.post_review.export_test_predictions` | `data/*.h5`, `output/ablation/models/ablation_FFT_euclidean_k120_single.joblib` | `output/test_predictions.csv`: one row per test window with `window_index, event_id, station, true_label, true_class, single_pred_label/_class, single_decision_score, calibrated_pred_label/_class, ensemble_pred_label/_class, ensemble_vote_confidence, ensemble_mean_decision_score`. Trains a fresh, unseeded 5-voter ensemble | About 4 min (estimate from the measured ensemble timing in `HOWTO.md`, section 3) |
+| `python -m src.post_review.export_test_predictions` | `data/*.h5`, `output/ablation/models/ablation_FFT_euclidean_k120_single.joblib` | `output/test_predictions.csv`: one row per test window with `window_index, event_id, station, true_label, true_class, single_pred_label/_class, single_decision_score, calibrated_pred_label/_class, ensemble_pred_label/_class, ensemble_vote_confidence, ensemble_mean_decision_score`. Trains a fresh 5-voter ensemble (NumPy seed 42; the published run was unseeded) | About 4 min (estimate from the measured ensemble timing in `HOWTO.md`, section 3) |
 | `python -m src.post_review.event_level_predictions` | `output/test_predictions.csv` | `output/event_level_predictions.csv` (one row per event; majority vote for single, calibrated and ensemble predictions); summary printed | Seconds |
 | `python -m src.post_review.export_advisor_table` | saved single model, `data/dataset_val.h5`, `data/dataset_test.h5`, `output/test_predictions.csv` | `output/advisor_table.csv` (validation rows: labels only; test rows: ensemble mean decision score thresholded with a calibrator fitted on the single model's validation scores) | Seconds |
 | `python -m src.post_review.p_only_and_distance [--draws 200] [--seed 0]` | `data/*.h5`, `output/test_predictions.csv`, `SeismicDataset/gsi_event_match.csv`, `SeismicDataset/station_metadata.csv` | `data/phase_labels.csv` (**writes into `data/`**), `output/p_only_distance_results.json` | Seconds |
+| `python -m src.post_review.time_distances [--pairs 300] [--repeats 200] [--fit-n 1000] [--fit-k 10]` | `data/dataset_test.h5` | `output/timing/distance_timing.json` (per-call times of `euclidean_distance` on log-spectra and `ncc_distance` on waveforms, FastMap fit and transform times with each, and the software versions) | About 1 min with the defaults; several minutes with `--fit-k 120` |
 | `python -m src.post_review.list_candidate_waveforms` | `data/*.h5` | `window_inventory.csv`, `event_inventory.csv`, `top_candidates.csv` in the examples folder under `output/` (the script's `OUTPUT_DIR`) | Seconds |
 | `python -m src.post_review.plot_advisor_examples` | `data/dataset_train.h5` | Fig. 2: `example_waveforms.{pdf,png}`, `example_spectra.{pdf,png}` in the examples folder under `output/` (the default `output_dir` of `plot_example_pair`), **not** in `output/decision_boundary_plots/`. Fig. 6 comes from calling `plot_spectra_and_ratio_pair(...)` (see README), which writes `output/decision_boundary_plots/spectra_and_ratio_by_channel.{pdf,png}` | Seconds |
-| `python -m src.post_review.extract_example_waveforms` | intended: `data/*.h5` | intended: the examples folder under `output/` (see `src/post_review/README.md`). **Known issue:** its `PROJECT_ROOT` resolves to `src/`, so it looks for `src/data/` and fails with `FileNotFoundError` | — |
-| `python -m src.post_review.plot_figure5_updated` | intended: `output/ablation/results/*_report.json` | intended: `output/ablation/plots/overall_ranking.{png,pdf}` (same files as `plot_ablation`). **Known issue:** same `PROJECT_ROOT` problem; it looks under `src/output/` | — |
+| `python -m src.post_review.extract_example_waveforms` | `data/*.h5` | Example waveform and spectrum figures in the examples folder under `output/` (see `src/post_review/README.md`); it can overwrite files of the same name there | Seconds |
+| `python -m src.post_review.plot_figure5_updated` | `output/ablation/results/*_report.json` | `output/ablation/plots/overall_ranking.{png,pdf}`: the same files as `plot_ablation` (Supplementary Fig. S2), which it overwrites | Seconds |
 | `python -m src.post_review.plot_station_map` | `output/station_list.csv`, `data/mainfaultsisrael/Main_Faults.shp` | `output/station_map.{png,pdf}`. Needs `cartopy`; neither input is produced by code in this repository | Seconds |
 
 `event_level_predictions`, `export_advisor_table` and `p_only_and_distance` need
@@ -249,8 +252,9 @@ the current directory.
 
 **Randomness.** FastMap draws one random starting object per dimension from NumPy's global RNG
 (`np.random.randint` in `FastMap.fit_transform`). `src/ablation.py` and the ensemble in
-`export_test_predictions.py` do not seed it, so reruns give slightly different embeddings and
-accuracies from the published numbers. `src/plot_gmm_analysis.py`,
+`export_test_predictions.py` seed it once (42) before training, so their reruns are repeatable;
+the published results came from unseeded runs, so a rerun differs slightly from them (two
+independent fits of the best ensemble gave 93.90% and 93.52%). `src/plot_gmm_analysis.py`,
 `src/plot_threshold_calibration.py` and `src/plot_decision_boundary.py` call `np.random.seed(42)`
 before fitting, and `examples/quickstart.py` does the same (option `--seed`). With the released
 data, the quickstart run documented in `HOWTO.md` reproduces the 92.09% test accuracy and the

@@ -66,12 +66,13 @@ seismic-event-classifier/
 │       ├── export_test_predictions.py    # Export window-level test predictions to CSV
 │       ├── event_level_predictions.py    # Aggregate to event-level via majority vote
 │       ├── p_only_and_distance.py        # P- vs S-onset accuracy; distance baseline and matched-distance accuracy
+│       ├── time_distances.py             # Distance and FastMap timing (paper Section 6.4)
 │       ├── export_advisor_table.py       # Generate advisor review tables
 │       ├── plot_station_map.py           # Station map visualization
 │       ├── plot_advisor_examples.py      # Paper Fig. 2 (example pair) and Fig. 6 (spectra and ratio)
 │       ├── list_candidate_waveforms.py   # Inventory of candidate example windows
-│       ├── plot_figure5_updated.py       # Alternative ranking plot (known path issue; see docs/USER_GUIDE.md)
-│       └── extract_example_waveforms.py  # Extract example waveforms (known path issue; see docs/USER_GUIDE.md)
+│       ├── plot_figure5_updated.py       # Alternative ranking plot (overwrites overall_ranking)
+│       └── extract_example_waveforms.py  # Extract example waveforms for figures
 ├── docs/
 │   ├── HOWTO.md                          # Tutorials for typical use cases
 │   └── USER_GUIDE.md                     # Inputs, outputs, options, API reference
@@ -415,9 +416,10 @@ try the quickstart example and the tutorials in [docs/HOWTO.md](docs/HOWTO.md).
 
 - `src/plot_gmm_analysis.py` and `src/plot_threshold_calibration.py` seed NumPy, so they reproduce the
   paper's decision-function and calibration numbers exactly.
-- `src/ablation.py` does not seed NumPy. FastMap draws its pivots at random, so an ablation rerun gives
-  accuracies that differ slightly from the published ones (for example, two independent fits of the best
-  ensemble gave 93.90% and 93.52% window-level accuracy).
+- `src/ablation.py` and `src/post_review/export_test_predictions.py` seed NumPy once (seed 42; for the ablation
+  it is the `seed` key of `src/ablation_config.py`), so their reruns are repeatable. FastMap draws its pivots at random and the
+  published results came from unseeded runs, so a rerun differs slightly from them (for example, two
+  independent fits of the best ensemble gave 93.90% and 93.52% window-level accuracy).
 - `output/` is not tracked in this repository: every script writes its results and figures there when
   run. The published numbers are those in the paper and its Supplementary Material.
 
@@ -479,6 +481,16 @@ python -m src.post_review.event_level_predictions
 ```bash
 python -m src.post_review.p_only_and_distance
 ```
+
+### Distance Timing (paper Section 6.4)
+
+```bash
+python -m src.post_review.time_distances
+```
+
+Times the Euclidean distance between two 903-dimensional log-spectra and the normalized cross-correlation
+(`ncc_distance`) between two 600 x 3 waveforms on random test-window pairs, and the FastMap fit and
+transform with each distance. Writes `output/timing/distance_timing.json`. Run it on an idle machine.
 
 ### Model Loading
 

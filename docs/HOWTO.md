@@ -121,7 +121,7 @@ F_trval = to_frequency_domain(np.vstack([X_tr, X_va]))
 y_trval = np.concatenate([y_tr, y_va])
 F_test = to_frequency_domain(X_te)
 
-np.random.seed(42)                      # optional; src/ablation.py does not seed
+np.random.seed(42)                      # optional; src/ablation.py seeds the same way (config "seed")
 voters = []
 for i in range(5):
     fm = FastMap(n_components=120, dist_func="euclidean")
@@ -204,9 +204,10 @@ Things to know:
   matters more than overall accuracy, set the threshold from a target recall instead, e.g.
   `scipy.stats.norm.ppf(0.95, cal.mu_eq, cal.sigma_eq)` keeps about 95% of earthquakes below it
   if the fitted Gaussian holds.
-- The class only searches between the two class means. For very large priors (P(EX) = 0.99 here)
-  the threshold stops at the earthquake mean (−1.001) instead of the unrestricted crossing
-  (−1.077 in `src/plot_threshold_calibration.py`); see `USER_GUIDE.md`, 4.4.
+- For very large priors the crossing lies beyond a class mean (P(EX) = 0.99 here gives −1.077,
+  below the earthquake mean); the class widens its search to find it (`USER_GUIDE.md`, 4.4).
+  Accuracy-optimal thresholds at such priors give up most earthquake recall, so check the
+  per-class recall before using one.
 
 ## 6. Retrain on another network's labeled windows
 
