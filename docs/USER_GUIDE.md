@@ -1,6 +1,6 @@
 # User Guide
 
-Reference for the inputs, outputs, options and expected behaviour of the code in `src/`.
+Reference for the inputs, outputs, options and expected behavior of the code in `src/`.
 For step-by-step tasks see [`HOWTO.md`](HOWTO.md); for installation and the commands that
 regenerate the paper's results see the top-level [`README.md`](../README.md).
 
@@ -248,7 +248,7 @@ needs ObsPy, pandas, tqdm and access to the archive. `build_training_dataset.py`
 `split_by_event.py` need only h5py, NumPy and scikit-learn and read and write fixed file names in
 the current directory.
 
-## 7. Expected behaviour
+## 7. Expected behavior
 
 **Randomness.** FastMap draws one random starting object per dimension from NumPy's global RNG
 (`np.random.randint` in `FastMap.fit_transform`). `src/ablation.py` and the ensemble in
