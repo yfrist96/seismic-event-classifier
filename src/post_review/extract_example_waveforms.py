@@ -3,7 +3,7 @@ Extract 3 example waveforms and their FFT spectra for Ittai.
 Outputs labeled 1-3 so they can be matched to updated Figures 2 & 3.
 All figures saved as both PNG (300 DPI) and PDF (vector).
 
-Usage: python -m src.extract_example_waveforms
+Usage: python -m src.post_review.extract_example_waveforms
 """
 
 import os
@@ -14,7 +14,7 @@ import matplotlib.pyplot as plt
 
 from src.dataloader import load_data
 
-PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 DATA_DIR = os.path.join(PROJECT_ROOT, "data")
 OUTPUT_DIR = os.path.join(PROJECT_ROOT, "output", "example_waveforms_for_ittai")
 

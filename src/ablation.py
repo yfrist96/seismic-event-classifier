@@ -144,6 +144,10 @@ def run_ablation():
 
     print(f"Train: {len(y_train)}, Val: {len(y_val)}, Test: {len(y_test)}")
 
+    # Seed FastMap's pivot selection so the whole sweep is repeatable
+    if CONFIG.get('seed') is not None:
+        np.random.seed(CONFIG['seed'])
+
     # Precompute both feature domains
     print("Precomputing FFT features...")
     X_train_fft = to_frequency_domain(X_train_raw)

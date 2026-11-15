@@ -23,6 +23,12 @@ ABLATION_CONFIG = {
     "use_ensemble": [True, False],
     "ensemble_n_models": 5,
 
+    # NumPy seed for FastMap's random pivot selection (set once at the start of the
+    # sweep; each model and each ensemble voter still draws its own pivots). The
+    # published results came from an unseeded run, so a seeded rerun is repeatable
+    # but differs slightly from them. Set to None for unseeded behavior.
+    "seed": 42,
+
     # SVM param grid (same for all — tuned on val)
     "svm_param_grid": [
         {

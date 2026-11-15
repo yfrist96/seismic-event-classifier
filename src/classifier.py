@@ -59,13 +59,28 @@ class BayesThresholdCalibrator:
             return (self.priors[0] * norm.pdf(x, self.mu_eq, self.sigma_eq) -
                     self.priors[1] * norm.pdf(x, self.mu_ex, self.sigma_ex))
 
+        lo, hi = min(self.mu_eq, self.mu_ex), max(self.mu_eq, self.mu_ex)
         try:
-            self.threshold = brentq(posterior_diff, self.mu_eq, self.mu_ex)
+            self.threshold = brentq(posterior_diff, lo, hi)
         except ValueError:
-            # Fallback: grid search between the means
-            x_grid = np.linspace(self.mu_eq, self.mu_ex, 10000)
-            diffs = np.abs([posterior_diff(x) for x in x_grid])
-            self.threshold = x_grid[np.argmin(diffs)]
+            # Extreme priors push the crossing beyond a class mean (e.g. below the
+            # earthquake mean when explosions dominate). Widen the bracket outward,
+            # one standard deviation at a time, on one side and then the other.
+            # The weighted densities cross at most twice, and a bracket with a sign
+            # change that contains one class mean holds the crossing nearest the bulk.
+            self.threshold = None
+            for n in range(1, 21):
+                for a, b in ((lo - n * self.sigma_eq, hi), (lo, hi + n * self.sigma_ex)):
+                    if posterior_diff(a) * posterior_diff(b) < 0:
+                        self.threshold = brentq(posterior_diff, a, b)
+                        break
+                if self.threshold is not None:
+                    break
+            if self.threshold is None:
+                # Fallback: point between the means where the weighted densities are closest
+                x_grid = np.linspace(lo, hi, 10000)
+                diffs = np.abs([posterior_diff(x) for x in x_grid])
+                self.threshold = x_grid[np.argmin(diffs)]
 
         self.is_calibrated = True
         return self

@@ -2,7 +2,7 @@
 Generate updated Figure 5: Top 5 FFT models, best time-series model, and baseline.
 Horizontal bar chart ranked by test accuracy.
 
-Usage: python -m src.plot_figure5_updated
+Usage: python -m src.post_review.plot_figure5_updated
 """
 
 import os
@@ -13,7 +13,7 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from matplotlib.patches import Patch
 
-PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 RESULTS_DIR = os.path.join(PROJECT_ROOT, "output", "ablation", "results")
 OUTPUT_DIR = os.path.join(PROJECT_ROOT, "output", "ablation", "plots")
 

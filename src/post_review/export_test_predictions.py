@@ -3,7 +3,10 @@ Export test set predictions with metadata for Ittai.
 Uses the best single model (FFT + Euclidean + k=120) and also
 trains a 5-voter ensemble to provide ensemble predictions + confidence.
 
-Usage: python -m src.export_test_predictions
+Usage: python -m src.post_review.export_test_predictions
+
+The ensemble's FastMap pivots are random; NumPy is seeded (SEED) so reruns are
+repeatable. The published run was unseeded, so a rerun differs slightly from it.
 """
 
 import os
@@ -25,6 +28,7 @@ OUTPUT_DIR = os.path.join(PROJECT_ROOT, "output")
 
 LABEL_MAP = {0: 'earthquake', 1: 'explosion'}
 N_ENSEMBLE = 5
+SEED = 42
 
 
 def to_frequency_domain(X):
@@ -78,6 +82,7 @@ def predict_ensemble(X_train_fft, y_train, X_val_fft, y_val, X_test_fft, best_pa
     all_decision = np.zeros((N_ENSEMBLE, len(X_test_fft)))
 
     print(f"  Training {N_ENSEMBLE} ensemble voters...")
+    np.random.seed(SEED)  # each voter still draws its own pivots from the seeded stream
     for i in range(N_ENSEMBLE):
         model = FastMapSVMClassifier(k=120, dist_func='euclidean')
         X_trainval_emb = model.fastmap.fit_transform(X_trainval)
