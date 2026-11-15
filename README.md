@@ -4,10 +4,20 @@ A machine learning system for classifying seismic events as **Earthquakes** or *
 
 Reference implementation for the manuscript *"A Frequency-Domain FastMap-SVM Ensemble for CPU-Efficient,
 Near Real-Time Earthquake-Explosion Discrimination"* (submitted to **Computers & Geosciences**).
-Reproduces every figure and table in the paper. Runs on a commodity CPU: no GPU required.
+Contains the code that produces every figure and table in the paper (see [Reproducibility](#reproducibility)).
+Runs on a commodity CPU: no GPU required.
 
-**Headline results** — 93.90% window-level and 96.97% event-level accuracy on a held-out test set of
-1,327 station-windows from 165 events, against 62.62% for a Random Forest baseline.
+**Headline results**: 93.90% window-level and 96.97% event-level accuracy on a held-out test set of
+1,327 station windows from 165 events. Explosions in this dataset are recorded at more than twice the
+distance of earthquakes; at matched source-station distance, window-level accuracy is 86.8%. P-onset
+windows alone, available about 2.5 s after the P arrival, give 93.5% per window.
+
+**Documentation**
+- [docs/HOWTO.md](docs/HOWTO.md): step-by-step tutorials for typical tasks (get the data, train and
+  evaluate a model, classify new windows, set the threshold for a deployment, retrain on your own network).
+- [docs/USER_GUIDE.md](docs/USER_GUIDE.md): reference for the input data format, the Python API, every
+  script's inputs, outputs and options, and expected behavior.
+- [examples/quickstart.py](examples/quickstart.py): a runnable end-to-end example.
 
 ## Project Goal
 
@@ -26,9 +36,9 @@ seismic-event-classifier/
 │   └── dataset_test.h5                   # Test split (1,327 samples)
 ├── SeismicDataset/
 │   ├── build_training_dataset.py         # Combine per-station HDF5 into unified dataset
-│   ├── split_by_event.py                 # Event-level stratified train/val/test split
+│   ├── split_by_event.py                 # Event-level random 70/15/15 train/val/test split (seed 42)
 │   ├── select_good_stations.py           # Filter stations by minimum window counts
-│   ├── metadata.json                     # Event catalog metadata
+│   ├── metadata.json                     # Dataset parameters: sampling rate, window, channels, labels, stations, counts
 │   ├── station_metadata.csv              # Station coordinates and info
 │   └── summary_plots/                    # Dataset summary visualizations
 ├── output/
@@ -40,8 +50,7 @@ seismic-event-classifier/
 │   ├── decision_boundary_plots/          # Decision boundary & spectral analysis plots
 │   ├── test_predictions.csv              # Window-level test predictions (1,327 rows)
 │   ├── event_level_predictions.csv       # Event-level predictions (165 rows)
-│   ├── advisor_table.csv                 # Window-level results for advisor review
-│   └── advisor_event_level.csv           # Event-level results for advisor review
+│   └── advisor_table.csv                 # Window-level results for advisor review
 ├── src/
 │   ├── ablation_config.py                # Ablation study configuration
 │   ├── ablation.py                       # Ablation study runner
@@ -60,9 +69,16 @@ seismic-event-classifier/
 │       ├── export_advisor_table.py       # Generate advisor review tables
 │       ├── plot_station_map.py           # Station map visualization
 │       ├── plot_advisor_examples.py      # Paper Fig. 2 (example pair) and Fig. 6 (spectra and ratio)
-│       └── extract_example_waveforms.py  # Extract example waveforms for figures
+│       ├── list_candidate_waveforms.py   # Inventory of candidate example windows
+│       ├── plot_figure5_updated.py       # Alternative ranking plot (known path issue; see docs/USER_GUIDE.md)
+│       └── extract_example_waveforms.py  # Extract example waveforms (known path issue; see docs/USER_GUIDE.md)
+├── docs/
+│   ├── HOWTO.md                          # Tutorials for typical use cases
+│   └── USER_GUIDE.md                     # Inputs, outputs, options, API reference
+├── examples/
+│   └── quickstart.py                     # Runnable end-to-end example
 ├── figures/                              # Figures embedded in this README
-├── advisor_figures/                      # Figures contributed by domain advisor (GSI)
+├── LICENSE
 ├── README.md
 ├── requirements.txt
 └── .gitignore
@@ -80,6 +96,8 @@ Windows are produced by `SeismicDataset/400_extract_event_wfs_antelope.py` from 
   S-onset windows); `python -m src.post_review.p_only_and_distance` writes per-window phase labels.
 - **Filter**: 1–20 Hz bandpass, applied with a 5 s lead-in buffer that is then discarded so filter
   transients fall outside the retained window.
+- **Amplitude**: after filtering and trimming, each channel of each window is scaled to unit peak
+  amplitude (ObsPy `trace.normalize()`), so absolute amplitude is removed before any feature is computed.
 - **Channels**: three components (Z, N, E), from the first available of HH\*, BH\*, SH\*, EN\*.
 - **Station selection**: a station is kept only if it yields at least 20 valid earthquake and 20 valid
   explosion windows; 12 of 111 stations qualified.
@@ -89,25 +107,27 @@ Raw Seismic Data (N, 600, 3)     600 timesteps x 3 channels (Z, N, E)
         |
    [FFT branch]                  [Time branch]
         |                              |
-  rfft -> |magnitude|            flatten (N, 1800)
-  -> log10 -> L2 norm
+  rfft (no taper) -> |magnitude| flatten (N, 1800)
+  -> log10(. + 1e-6) -> L2 norm
   -> flatten (N, 903)
         |                              |
         +--------- FastMap (N, k) -----+
                        |
                  StandardScaler
                        |
-              SVM (tuned on val set)
+  SVM (kernel, C, class weight chosen on val set;
+       gamma fixed at 0.01)
                        |
              Retrain on train + val
                        |
             [Single] or [Ensemble x5]
                        |
-         Bayes Threshold Calibration
-          (fit Gaussians per class,
-           shift threshold for priors)
-                       |
               Final eval on test set
+
+Separate analysis (single SVM trained on train only):
+  fit Gaussians to validation decision values
+  -> closed-form threshold for a deployment prior
+     or for a target earthquake recall
 ```
 
 ### Data Split Protocol
@@ -156,7 +176,7 @@ We swept across 4 axes to isolate the contribution of each design choice:
 
 FFT features outperform time-domain features in 35 of the 36 matched configurations; for k >= 10 the margin runs from 2.3 to 24.0 percentage points. The best time-domain result (Lorentzian, k=120, ensemble: 79.73%) is still far below the best FFT result (93.90%). The single exception is Lorentzian at k=2, where a two-dimensional embedding is too coarse for either representation.
 
-The reason is that the discriminants for this problem are spectral, so a log-spectral representation exposes the properties that separate the classes and lets the SVM weight the frequency bands from data. In this dataset the spectral contrast reflects propagation as well as source: explosions are recorded at about 2.5× the distance of earthquakes, and window-level accuracy at matched distance is 86.8% (see `src/post_review/p_only_and_distance.py`). Windows are cut relative to the phase arrival at each station, so arrival-time alignment is handled by the windowing, not by the transform.
+This is consistent with the classical discriminants being spectral. In this dataset the spectral contrast reflects propagation as well as source: explosions are recorded at more than twice the distance of earthquakes, and window-level accuracy at matched distance is 86.8% (see `src/post_review/p_only_and_distance.py`), so the classifier operates on a combined source-and-path signature. Windows are cut relative to the phase arrival at each station, so arrival-time alignment is handled by the windowing, not by the transform.
 
 **2. Euclidean distance dominates on FFT features**
 
@@ -166,7 +186,7 @@ The reason is that the discriminants for this problem are spectral, so a log-spe
 | Canberra | 89.15% |
 | Lorentzian | 86.51% |
 
-Euclidean outperforms alternatives by 1-9% in the FFT domain. Lorentzian and Canberra, which were designed for robustness to outliers and relative differences, don't help when the features are already well-normalized by the FFT+L2 pipeline.
+In the FFT domain Euclidean distance outperforms Lorentzian and Canberra at every embedding dimension, by 1.8 to 13.9 percentage points for k >= 10 (single and ensemble models). After log compression no spectral bin carries an extreme value, so the outlier robustness these metrics were designed for has nothing to protect against; Canberra, which divides each bin's difference by its summed amplitude, also up-weights low-energy bins outside the 1-20 Hz passband (paper Section 6.2).
 
 **3. More dimensions help, with diminishing returns**
 
@@ -179,13 +199,13 @@ Euclidean outperforms alternatives by 1-9% in the FFT domain. Lorentzian and Can
 | 80 | 92.99% |
 | 120 | 93.90% |
 
-k=2 is essentially useless. The jump from k=10 to k=30 is large (+4.5%), then gains taper off. k=80-120 is the sweet spot.
+Accuracy rises steeply up to k=10 (61.2% at k=2, 87.2% at k=10), more slowly to 90.7% at k=30, and plateaus around k=80-120.
 
-Notably, Lorentzian *degrades* at higher k (peaks at k=30, drops at k=60+), suggesting it doesn't scale well with many dimensions.
+With Lorentzian distance the ensemble peaks at k=30 (86.5%) and declines slightly at k >= 60.
 
-**4. Ensemble consistently improves accuracy**
+**4. Ensemble improves accuracy for k >= 10**
 
-Ensemble voting (5 independent FastMap projections with different random pivots) consistently improves accuracy by 1-7.5 percentage points. For Euclidean distance, the gain is a steady 1.5-3pp across all k values. For weaker metrics like Lorentzian, gains reach up to 7.5pp (at k=80), as ensemble voting compensates for suboptimal pivot selection.
+Ensemble voting (5 FastMap-SVM models, each with its own random pivots) improves on the single model in every FFT configuration with k >= 10, by 1.0 to 7.5 percentage points. For Euclidean distance the gain is 1.0-3.1 pp across all k. The gain is largest for weaker metrics (7.5 pp for Lorentzian at k=80), consistent with voting compensating for suboptimal pivot selection. At k=2 the ensemble can be worse than the single model (-1.7 pp for FFT Lorentzian, -8.0 pp for time-domain Euclidean).
 
 **5. Validation accuracy tracks test accuracy well**
 
@@ -197,19 +217,18 @@ Best model (FFT + Euclidean, k=120, ensemble):
 - Earthquake F1: 0.929
 - Explosion F1: 0.947
 
-The model is slightly better at detecting explosions, likely because their spectral signatures (sharp high-frequency peaks) are more distinctive than the diffuse energy patterns of earthquakes.
-
 ### Event-Level Predictions
 
 The window-level accuracy (93.90%) measures per-station performance, but operationally the goal is to classify each **event**. Since multiple stations record the same event, we aggregate window predictions to event-level using majority vote across all windows from the same event.
 
 | Prediction Type | Window Acc | Event Acc | Delta |
 |-----------------|-----------|-----------|-------|
-| Single          | 92.31%    | 95.76%    | +3.45pp |
-| Calibrated      | 91.94%    | 94.55%    | +2.61pp |
-| Ensemble        | 93.90%    | **96.97%** | +3.07pp |
+| Single          | 92.31%    | 95.76%    | +3.44pp |
+| Ensemble (N=5)  | 93.52%    | **96.97%** | +3.45pp |
 
-Event-level ensemble accuracy reaches **96.97%** — only 5 out of 165 test events misclassified. The improvement is expected: station-specific path effects and noise are independent across stations, so majority voting across windows smooths out individual station errors.
+The ensemble's window-level accuracy here (93.52%) is marginally below the 93.90% in the ablation table because the two come from independent ensemble fits (FastMap pivots are random; see [Reproducibility](#reproducibility)). Event-level ensemble accuracy reaches **96.97%**: 5 of 165 test events are misclassified. Majority voting across stations suppresses errors specific to individual stations.
+
+On P-onset windows alone, which are all a real-time decision has, window-level accuracy is 93.50% (677 windows) and an event-level vote reaches 95.15% (8 of 165 events misclassified); see `python -m src.post_review.p_only_and_distance`.
 
 Per-class event-level breakdown (ensemble):
 - Earthquake: 74/75 correct (98.67%)
@@ -221,7 +240,7 @@ python -m src.post_review.event_level_predictions
 
 ## Statistical Analysis of the Decision Function
 
-The SVM decision-function values for each class closely resemble Gaussian distributions. We analyze this on a single SVM model (FFT + Euclidean, k=120): the ensemble combines five models by majority vote and has no single decision function, so the analysis characterizes the individual models within it. Following the paper's out-of-sample protocol, the analysis model is trained on the training split, every quantity below is calibrated on the validation split, and the test split is used only for evaluation (paper Section 5.8; Supplementary Material, Sections S-III and S-IV).
+The SVM decision-function values for each class closely resemble Gaussian distributions. We analyze this on a single SVM model (FFT + Euclidean, k=120): the ensemble combines five models by majority vote and has no single scalar decision function, so the analysis uses a single SVM of the best configuration; it does not describe the ensemble itself. Following the paper's out-of-sample protocol, the analysis model is trained on the training split only, every quantity below is calibrated on the validation split, and the test split is used only for evaluation (paper Section 5.5; Supplementary Material, Sections S-III and S-IV).
 
 ### Gaussian Mixture Model Validation
 
@@ -255,7 +274,7 @@ The d-prime (d') from signal detection theory measures class separability as the
 
 $$d' = \frac{|\mu_{EX} - \mu_{EQ}|}{\sqrt{(\sigma_{EQ}^2 + \sigma_{EX}^2)/2}}$$
 
-With the validation fits, d' = 2.78; the same class-conditional model gives d' = 2.87 on the held-out test set. For two equal-variance Gaussians, a d' in this range corresponds to an ideal-observer accuracy of about 92%, close to the single SVM's test accuracy (92.09%).
+With the validation fits, d' = 2.78; the same class-conditional model gives d' = 2.87 on the held-out test set. For two equal-variance Gaussians, a d' in this range corresponds to an ideal-observer accuracy of about 92%, close to the single SVM's test accuracy (92.09%). This analysis model is trained on the training split only; the 92.31% single model in the ablation table is retrained on train + validation (see [docs/USER_GUIDE.md](docs/USER_GUIDE.md), section 6.1).
 
 ### Bayes-Optimal Threshold Calibration
 
@@ -273,29 +292,41 @@ With the validation fits and validation priors (45% earthquakes, 55% explosions)
 
 At these near-balanced priors the SVM default is already at the Bayes-optimal point, and calibration changes nothing (+0.00 pp).
 
-The `BayesThresholdCalibrator` class in `classifier.py` implements this. It also accepts custom priors for deployment scenarios with different class ratios (e.g., real-world monitoring where explosions vastly outnumber earthquakes).
+The `BayesThresholdCalibrator` class in `classifier.py` implements this. It also accepts custom priors for deployments with a different class mix (e.g., one where explosions outnumber earthquakes).
 
 ### Calibration Under Deployment Imbalance
 
-In operational monitoring the class mix can be far more imbalanced than in a curated dataset. We simulated this by computing prior-weighted test accuracy under varying explosion priors, with tau* derived from the validation-calibrated Gaussians:
+A deployment's class mix can differ from a curated dataset's. We simulated this by computing prior-weighted test accuracy under varying explosion priors, with tau* derived from the validation-calibrated Gaussians. The analysis assumes label shift: only the class mix changes, while each class's distribution of decision values stays as calibrated. Recalls are measured on the held-out test set at tau*; at t = 0 they are 92.2% for earthquakes and 92.0% for explosions.
 
-| Scenario | π_EX | Threshold τ* | Acc (t=0) | Gain |
-|----------|------|-------------|-----------|------|
-| Balanced | 50% | +0.016 | 92.10% | −0.11pp |
-| Test set | 57% | −0.059 | 92.09% | −0.15pp |
-| Moderate | 70% | −0.196 | 92.06% | +0.56pp |
-| High | 80% | −0.328 | 92.04% | +1.73pp |
-| Severe | 90% | −0.523 | 92.02% | **+4.24pp** |
-| Operational | 95% | −0.699 | 92.01% | **+5.50pp** |
-| Extreme | 99% | −1.077 | 92.00% | **+6.86pp** |
+| Scenario | π_EX | Threshold τ* | Acc (t=0) | Acc (τ*) | Gain | EQ recall | EX recall | Always EX |
+|----------|------|-------------|-----------|----------|------|-----------|-----------|-----------|
+| Balanced | 50% | +0.016 | 92.10% | 92.00% | −0.11pp | 92.4% | 91.6% | 50.00% |
+| Test set | 57% | −0.059 | 92.09% | 91.94% | −0.15pp | 90.6% | 92.9% | 57.40% |
+| Moderate | 70% | −0.196 | 92.06% | 92.62% | +0.56pp | 86.7% | 95.1% | 70.00% |
+| High | 80% | −0.328 | 92.04% | 93.76% | +1.73pp | 82.0% | 96.7% | 80.00% |
+| Severe | 90% | −0.523 | 92.02% | 96.26% | +4.24pp | 75.6% | 98.6% | 90.00% |
+| Operational | 95% | −0.699 | 92.01% | 97.51% | +5.50pp | 70.1% | 99.0% | 95.00% |
+| Extreme | 99% | −1.077 | 92.00% | 98.86% | +6.86pp | 50.8% | 99.3% | 99.00% |
 
-At the test-set balance the SVM default is already near-optimal. As the explosion prior rises, calibration gains 4-7 pp with no retraining, only a threshold shift derived from the fitted Gaussians. These gains come from reweighting the test set; validation on a genuinely imbalanced operational catalog is still to be done.
+Recalibration for a prior trades one error type for the other. As the explosion prior rises, prior-weighted accuracy improves with no retraining, but the gain comes from labeling more events as explosions: earthquake recall falls from 92.2% to 70.1% at π_EX = 0.95. At π_EX = 0.99 the recalibrated accuracy (98.86%) is below that of a constant rule that labels every event an explosion (99.00%). These numbers come from reweighting the test set; validation on a genuinely imbalanced operational catalog is still to be done, and the deployment prior must be known or estimated.
+
+### Threshold for a Target Earthquake Recall
+
+A missed earthquake is removed from the earthquake catalog, so an operator may prefer to fix the earthquake recall and accept the resulting explosion error (a Neyman-Pearson operating point). The validation Gaussians give this threshold in closed form, independent of the prior: `tau_NP = mu_EQ + sigma_EQ * Phi^-1(r)` for a target recall `r`, and they predict the explosion recall that follows.
+
+| Target EQ recall | τ_NP | EQ recall (test) | EX recall (test) | EX recall (predicted) |
+|------------------|------|------------------|------------------|-----------------------|
+| 90% | −0.038 | 91.5% | 92.5% | 93.5% |
+| 95% | +0.236 | 95.6% | 87.1% | 86.6% |
+| 99% | +0.748 | 98.8% | 65.1% | 63.4% |
+
+For these targets both recalls hold on the held-out test set to within 1.7 pp of the prediction. Far from the default boundary the predictions are less exact: at the Bayes thresholds for π_EX >= 0.95 above, the Gaussians underestimate test earthquake recall by about 5 pp (they err on the conservative side). Paper Section 5.5 and Supplementary Material Section S-IV (Tables S4 and S5).
 
 ![Threshold Calibration](figures/threshold_calibration.png)
 
 ### Overlap Analysis
 
-The overlap coefficient between the two prior-weighted class distributions is 0.081 (8.1%), a lower bound on the Bayes error for any classifier operating on the decision function alone. The empirical validation error rates are close to this bound:
+The overlap coefficient between the two prior-weighted class distributions is 0.081 (8.1%). This is the Bayes error rate under the fitted Gaussians and so, if the fit holds, a lower bound on the error of any classifier operating on the decision function alone. The empirical validation error rates are close to this bound:
 
 - Earthquakes beyond the SVM boundary: 9.5%
 - Explosions beyond the SVM boundary: 8.7%
@@ -337,11 +368,11 @@ Saved to `output/decision_boundary_plots/` by running `python -m src.plot_decisi
 | `example_waveforms.png` | Single earthquake vs explosion raw waveform comparison |
 | `example_spectra.png` | FFT spectra of the same example events |
 
-Note: `plot_decision_boundary` draws its example pair at random and writes it to `example_waveforms` and `example_spectra`, overwriting the paper's Fig. 2 files. Run the commands under "Generate the Paper's Figures 2 and 6" afterwards to restore them.
+Note: `plot_decision_boundary` draws its own example pair (NumPy seed 42) and writes it to `example_waveforms` and `example_spectra` in `output/decision_boundary_plots/`, overwriting the paper's Fig. 2 files there. `python -m src.post_review.plot_advisor_examples` regenerates the paper's Fig. 2 pair, but writes it to `output/example_waveforms_for_ittai/`; copy `example_waveforms.*` and `example_spectra.*` from there into `output/decision_boundary_plots/` to restore the paper's Fig. 2.
 
 ### Paper Figures 2 and 6
 
-Saved to `output/decision_boundary_plots/` by `src/post_review/plot_advisor_examples.py`, for earthquake 123583 at OFRI and explosion 399313 at ZFRI:
+Produced by `src/post_review/plot_advisor_examples.py`, for earthquake 123583 at OFRI and explosion 399313 at ZFRI. Fig. 6 is written to `output/decision_boundary_plots/`; Fig. 2 is written to `output/example_waveforms_for_ittai/`, and the paper uses copies of those files in `output/decision_boundary_plots/`:
 
 | Plot | Description |
 |------|-------------|
@@ -362,8 +393,10 @@ Saved to `output/decision_boundary_plots/` by running `python -m src.plot_thresh
 
 | Plot | Description |
 |------|-------------|
-| `threshold_calibration.png` | 2-panel figure: (1) accuracy with default vs calibrated threshold across explosion priors, (2) gain and threshold shift as a function of prior |
-| `threshold_calibration_results.json` | Full numerical results for all simulated scenarios |
+| `threshold_calibration.png` / `.pdf` | 2-panel figure (Supplementary Fig. S7): (1) prior-weighted accuracy with default vs calibrated threshold across explosion priors, the constant "always explosion" rule, and earthquake recall at the calibrated threshold; (2) gain and threshold shift as a function of prior |
+| `threshold_calibration_results.json` | Gaussian parameters; for each simulated prior the threshold, accuracies, gain, per-class recalls and "always explosion" accuracy; and the target-earthquake-recall operating points |
+
+The script seeds NumPy (`np.random.seed(42)`), so reruns reproduce these numbers.
 
 ## How to Run
 
@@ -375,7 +408,18 @@ conda activate seismic
 pip install -r requirements.txt
 ```
 
-Place the HDF5 data files in `data/`.
+Place the HDF5 data files in `data/` (see [Data availability](#data-availability)). For a first run,
+try the quickstart example and the tutorials in [docs/HOWTO.md](docs/HOWTO.md).
+
+### Reproducibility
+
+- `src/plot_gmm_analysis.py` and `src/plot_threshold_calibration.py` seed NumPy, so they reproduce the
+  paper's decision-function and calibration numbers exactly.
+- `src/ablation.py` does not seed NumPy. FastMap draws its pivots at random, so an ablation rerun gives
+  accuracies that differ slightly from the published ones (for example, two independent fits of the best
+  ensemble gave 93.90% and 93.52% window-level accuracy).
+- `output/` is not tracked in this repository: every script writes its results and figures there when
+  run. The published numbers are those in the paper and its Supplementary Material.
 
 ### Run Ablation Study
 
@@ -404,7 +448,7 @@ python -m src.post_review.plot_advisor_examples
 python -c "from src.post_review.plot_advisor_examples import plot_spectra_and_ratio_pair; plot_spectra_and_ratio_pair(123583, 'OFRI', 399313, 'ZFRI', fmax=60.0)"
 ```
 
-The first command writes Fig. 2 and the second Fig. 6.
+The first command writes Fig. 2 (to `output/example_waveforms_for_ittai/`) and the second Fig. 6 (to `output/decision_boundary_plots/`).
 
 ### Generate GMM Statistical Analysis
 
@@ -437,6 +481,10 @@ python -m src.post_review.p_only_and_distance
 ```
 
 ### Model Loading
+
+The model files exist only after running `python -m src.ablation` (`output/` is not tracked), which saves the
+36 single models but not the ensembles. To train and save an ensemble, or to classify new windows, see
+[docs/HOWTO.md](docs/HOWTO.md), sections 3 and 4.
 
 ```python
 import joblib
@@ -477,8 +525,10 @@ calibrator.fit(decision_vals, y_labels, priors={0: 0.05, 1: 0.95})
 
 ## Requirements
 
-- Python 3.8+ (developed and tested on 3.12)
-- numpy >= 1.21, scipy >= 1.7, scikit-learn >= 1.0, h5py >= 3.1, matplotlib >= 3.4, joblib >= 1.1
+- Python 3.9+ (developed and tested on 3.12)
+- numpy >= 1.21, scipy >= 1.9, scikit-learn >= 1.5, h5py >= 3.1, matplotlib >= 3.4, joblib >= 1.1, pandas >= 2.2
+  (pinned in `requirements.txt`; pandas is needed by the `src/post_review/` scripts)
+- Optional: `cartopy`, only for `src/post_review/plot_station_map.py`
 - No GPU or other accelerator required. Timings in the paper were measured on an Apple M4 (Mac mini, 16 GB RAM).
 
 ## Data availability
